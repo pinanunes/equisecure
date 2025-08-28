@@ -3,20 +3,38 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
 import type { Exploracao, Evaluation } from '../types';
+import ConsentModal from '../components/ConsentModal';
 
 const Dashboard: React.FC = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, updateConsent } = useAuth();
   const [exploracoes, setExploracoes] = useState<Exploracao[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showConsentModal, setShowConsentModal] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (user) {
       fetchExploracoes();
       fetchEvaluations();
+      
+      // Check if user needs to give consent
+      if (user.has_given_consent === false || user.has_given_consent === undefined) {
+        setShowConsentModal(true);
+      }
     }
   }, [user]);
+
+  const handleConsent = async () => {
+    const { error } = await updateConsent();
+    if (!error) {
+      setShowConsentModal(false);
+    } else {
+      console.error('Error updating consent:', error);
+      // Still close modal to not block the user
+      setShowConsentModal(false);
+    }
+  };
 
   const fetchExploracoes = async () => {
     try {
@@ -231,6 +249,9 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </main>
+      
+      {/* Consent Modal */}
+      <ConsentModal isOpen={showConsentModal} onConsent={handleConsent} />
     </div>
   );
 };

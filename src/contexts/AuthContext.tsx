@@ -11,6 +11,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<{ error: any }>;
   resetPassword: (email: string) => Promise<{ error: any }>;
+  updateConsent: () => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,30 +30,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        fetchUserProfile(session.user);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    // Listen for auth changes
+    setLoading(true);
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (session?.user) {
         await fetchUserProfile(session.user);
       } else {
         setUser(null);
-        setLoading(false);
       }
+      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchUserProfile = async (authUser: User) => {
@@ -122,6 +115,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error };
   };
 
+  const updateConsent = async () => {
+    if (!user) {
+      return { error: new Error('User not authenticated') };
+    }
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ has_given_consent: true })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error updating consent:', error);
+        return { error };
+      }
+
+      // Update local user state
+      setUser(prev => prev ? { ...prev, has_given_consent: true } : null);
+      return { error: null };
+    } catch (error) {
+      console.error('Error in updateConsent:', error);
+      return { error };
+    }
+  };
+
   const value = {
     user,
     session,
@@ -130,6 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signIn,
     signOut,
     resetPassword,
+    updateConsent,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

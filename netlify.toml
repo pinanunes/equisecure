@@ -1,0 +1,12 @@
+# Netlify configuration for EquiSecure SPA
+[build]
+  # Build command
+  command = "npm run build"
+  # Directory to publish
+  publish = "dist"
+
+# Redirect all routes to index.html for SPA routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

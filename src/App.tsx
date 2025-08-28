@@ -15,6 +15,7 @@ import QuestionnaireManagement from './pages/admin/QuestionnaireManagement';
 import QuestionnaireBuilder from './pages/admin/QuestionnaireBuilder';
 import Evaluation from './pages/Evaluation';
 import EvaluationReport from './pages/EvaluationReport';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
 
 // Public Route Component (redirect to dashboard if already logged in)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -162,6 +163,9 @@ function App() {
               }
             />
           </Routes>
+          
+          {/* PWA Install Prompt */}
+          <PWAInstallPrompt />
         </div>
       </Router>
     </AuthProvider>
