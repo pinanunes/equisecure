@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
-import type { Questionnaire, Section, Question, QuestionOption, Exploracao } from '../types';
+import type { Questionnaire, Section, Question, QuestionOption } from '../types';
 
 interface QuestionnaireWithSections extends Questionnaire {
   sections: (Section & {
@@ -65,7 +65,7 @@ const Evaluation: React.FC = () => {
       
       try {
         // Fetch the exploração data
-        const { data: exploracaoData, error: exploracaoError } = await supabase
+        const { error: exploracaoError } = await supabase
           .from('installations')
           .select('*')
           .eq('id', installationParam)
