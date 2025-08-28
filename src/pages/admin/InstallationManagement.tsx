@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import AdminLayout from '../../components/AdminLayout';
-import type { Exploracao, Evaluation } from '../../types';
+import type { Exploracao } from '../../types';
 
 interface InstallationWithLastEvaluation extends Exploracao {
   lastEvaluationDate?: string;

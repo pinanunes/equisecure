@@ -154,7 +154,6 @@ const Dashboard: React.FC = () => {
               <ul className="divide-y divide-gray-200">
                 {exploracoes.map((installation) => {
                   const installationEvaluations = getInstallationEvaluations(installation.id);
-                  const latestEvaluation = installationEvaluations[0];
                   
                   return (
                     <li key={installation.id} className="px-4 py-4 sm:px-6">

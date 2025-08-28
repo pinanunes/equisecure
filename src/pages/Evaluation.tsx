@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
-import type { Questionnaire, Section, Question, QuestionOption, Exploracao, Evaluation as EvaluationType } from '../types';
+import type { Questionnaire, Section, Question, QuestionOption, Exploracao } from '../types';
 
 interface QuestionnaireWithSections extends Questionnaire {
   sections: (Section & {
@@ -38,8 +38,6 @@ const Evaluation: React.FC = () => {
   
   // Exploração management state
   const [exploracaoId, setExploracaoId] = useState<string | null>(null);
-  const [exploracaoData, setExploracaoData] = useState<Exploracao | null>(null);
-  const [isReEvaluation, setIsReEvaluation] = useState(false);
   const [showExploracaoForm, setShowExploracaoForm] = useState(false);
   const [exploracaoForm, setExploracaoForm] = useState({
     name: '',
@@ -64,7 +62,6 @@ const Evaluation: React.FC = () => {
     if (installationParam) {
       // This is a re-evaluation
       setExploracaoId(installationParam);
-      setIsReEvaluation(true);
       
       try {
         // Fetch the exploração data
@@ -79,8 +76,6 @@ const Evaluation: React.FC = () => {
           console.error('Error fetching exploração:', exploracaoError);
           return;
         }
-
-        setExploracaoData(exploracaoData);
 
         // Fetch the most recent evaluation for this exploração
         const { data: latestEvaluation, error: evaluationError } = await supabase
@@ -243,13 +238,6 @@ const Evaluation: React.FC = () => {
     });
   };
 
-  const getScoreColor = (percentage: number) => {
-    if (percentage <= 25) return 'bg-green-500';
-    if (percentage <= 50) return 'bg-yellow-500';
-    if (percentage <= 75) return 'bg-orange-500';
-    return 'bg-red-500';
-  };
-
   const getScoreGradient = (percentage: number) => {
     const green = Math.max(0, 255 - (percentage * 2.55));
     const red = Math.min(255, percentage * 2.55);
@@ -281,7 +269,6 @@ const Evaluation: React.FC = () => {
       }
 
       setExploracaoId(newExploracao.id);
-      setExploracaoData(newExploracao);
       setShowExploracaoForm(false);
     } catch (error) {
       console.error('Error in handleCreateExploracao:', error);
