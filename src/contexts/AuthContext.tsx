@@ -29,66 +29,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let mounted = true;
+  // Centralized user profile fetching
+  const fetchUserProfile = async (authUser: User | null) => {
+    if (!authUser) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
 
-    const initializeAuth = async () => {
-      try {
-        // Get initial session
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Error getting session:', error);
-          if (mounted) {
-            setLoading(false);
-          }
-          return;
-        }
-
-        if (mounted) {
-          setSession(session);
-          if (session?.user) {
-            await fetchUserProfile(session.user);
-          } else {
-            setUser(null);
-            setLoading(false);
-          }
-        }
-      } catch (error) {
-        console.error('Error in initializeAuth:', error);
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    // Initialize auth state
-    initializeAuth();
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-      
-      console.log('Auth state change:', event, session?.user?.email);
-      
-      setSession(session);
-      if (session?.user) {
-        await fetchUserProfile(session.user);
-      } else {
-        setUser(null);
-        setLoading(false);
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const fetchUserProfile = async (authUser: User) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -97,36 +45,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error && error.code === 'PGRST116') {
-        // User doesn't exist in our profiles table, create it
+        // Profile doesn't exist, create it
         const { data: newUser, error: insertError } = await supabase
           .from('profiles')
-          .insert([
-            {
-              id: authUser.id,
-              email: authUser.email,
-              role: 'user'
-            }
-          ])
+          .insert([{ id: authUser.id, email: authUser.email, role: 'user' }])
           .select()
           .single();
-
-        if (insertError) {
-          console.error('Error creating user profile:', insertError);
-        } else {
-          setUser(newUser);
-        }
+        
+        if (insertError) throw insertError;
+        setUser(newUser);
       } else if (error) {
-        console.error('Error fetching user profile:', error);
+        throw error;
       } else {
         setUser(data);
       }
     } catch (error) {
-      console.error('Error in fetchUserProfile:', error);
+      console.error('Error fetching or creating user profile:', error);
+      // In case of error, ensure user is logged out to avoid inconsistent states
+      setUser(null);
+      await supabase.auth.signOut();
     } finally {
+      // This is the crucial part: ensure loading is always set to false
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    // On initial load, get the session and set up the listener
+    // This will fire once with the initial session state
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state change detected:', event, session);
+      setSession(session);
+      fetchUserProfile(session?.user ?? null);
+    });
+
+    // Cleanup function to unsubscribe from the listener
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []); // Empty dependency array ensures this runs only once on mount
+
+  // ... (rest of your functions: signUp, signIn, etc.)
   const signUp = async (email: string, password: string) => {
     const { error } = await supabase.auth.signUp({
       email,
