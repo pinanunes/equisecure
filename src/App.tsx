@@ -16,6 +16,7 @@ import QuestionnaireBuilder from './pages/admin/QuestionnaireBuilder';
 import Evaluation from './pages/Evaluation';
 import EvaluationReport from './pages/EvaluationReport';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
+import Footer from './components/Footer';
 
 // Public Route Component (redirect to dashboard if already logged in)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -36,8 +37,9 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="App">
-          <Routes>
+        <div className="App min-h-screen flex flex-col">
+          <div className="flex-1">
+            <Routes>
             {/* Public Routes */}
             <Route
               path="/login"
@@ -162,7 +164,11 @@ function App() {
                 </div>
               }
             />
-          </Routes>
+            </Routes>
+          </div>
+          
+          {/* Footer */}
+          <Footer />
           
           {/* PWA Install Prompt */}
           <PWAInstallPrompt />
