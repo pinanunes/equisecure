@@ -224,6 +224,7 @@ const Dashboard: React.FC = () => {
                                       </div>
                                       <Link
                                         to={`/evaluation-report/${evaluation.id}`}
+                                        state={{ from: '/dashboard' }}
                                         className="text-forest-green hover:text-forest-green-dark text-sm font-medium"
                                       >
                                         Ver Relatório

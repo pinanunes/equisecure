@@ -374,6 +374,7 @@ const AssessmentManagement: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <Link
                             to={`/evaluation-report/${assessment.id}`}
+                            state={{ from: '/admin/assessments' }}
                             className="text-forest-green hover:text-forest-green-dark mr-4"
                           >
                             Ver Relatório

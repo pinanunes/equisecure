@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import type { Evaluation, Exploracao, Questionnaire, Section, Question, QuestionOption } from '../types';
@@ -27,6 +27,7 @@ interface EvaluationWithDetails extends Evaluation {
 const EvaluationReport: React.FC = () => {
   const { evaluationId } = useParams<{ evaluationId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [evaluation, setEvaluation] = useState<EvaluationWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -188,6 +189,9 @@ const EvaluationReport: React.FC = () => {
   const totalRisk = getRiskLevel(evaluation.total_score);
   const sectionScores = evaluation.section_scores as Array<{ section_id: string; score: number }>;
   const recommendations = generateImprovementRecommendations();
+  
+  // Get the return path from navigation state, fallback to role-based default
+  const from = location.state?.from || (user?.role === 'admin' ? '/admin/assessments' : '/dashboard');
 
   return (
     <div className="min-h-screen bg-cream">
@@ -219,7 +223,7 @@ const EvaluationReport: React.FC = () => {
                 </button>
               )}
               <button
-                onClick={() => navigate(user?.role === 'admin' ? '/admin/assessments' : '/dashboard')}
+                onClick={() => navigate(from)}
                 className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
               >
                 Voltar
