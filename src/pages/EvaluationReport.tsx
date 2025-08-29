@@ -234,7 +234,7 @@ const EvaluationReport: React.FC = () => {
 
         {/* Overall Score */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-xl font-bold text-charcoal mb-4 font-serif">Score Total de Biossegurança</h3> {/* I've also added font-serif for style */}
+          <h3 className="text-xl font-bold text-charcoal mb-4">Score Total de Biossegurança</h3> {/* I've also added font-serif for style */}
   
           {/* 1. New container for the top line (score and percentage) */}
           <div className="flex items-center justify-between mb-2">
