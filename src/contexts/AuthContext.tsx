@@ -31,40 +31,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // This function is correct from your code. No changes needed here.
   const fetchUserProfile = async (authUser: User | null) => {
-    if (!authUser) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
+  if (!authUser) {
+    setUser(null);
+    setLoading(false);
+    return;
+  }
+  try {
+    // Now it ONLY fetches the profile. The database trigger handles creation.
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', authUser.id)
+      .single();
 
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
-
-      if (error && error.code === 'PGRST116') {
-        const { data: newUser, error: insertError } = await supabase
-          .from('profiles')
-          .insert([{ id: authUser.id, email: authUser.email, role: 'user', full_name: authUser.user_metadata.full_name }])
-          .select()
-          .single();
-        
-        if (insertError) throw insertError;
-        setUser(newUser);
-      } else if (error) {
-        throw error;
-      } else {
-        setUser(data);
-      }
-    } catch (error) {
-      console.error('Error fetching or creating user profile:', error);
-      setUser(null);
-      await supabase.auth.signOut();
-    } finally {
-      setLoading(false);
+    if (error) {
+      console.error('Error fetching user profile:', error.message);
+      // It's okay if this errors sometimes, especially right after sign up
+      // as the trigger might take a split second to run.
+    } else {
+      setUser(data);
     }
+  } catch (error) {
+    console.error('Error in fetchUserProfile:', error);
+    setUser(null);
+  } finally {
+    setLoading(false);
+  }
   };
 
   useEffect(() => {
