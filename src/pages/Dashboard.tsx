@@ -1,5 +1,3 @@
-// src/components/ExploracaoCard.tsx
-
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,6 +5,7 @@ import { supabase } from '../supabaseClient';
 import type { Exploracao, Evaluation } from '../types';
 import ConsentModal from '../components/ConsentModal';
 import ExploracaoCard from '../components/ExploracaoCard';
+import logoWhite from '../assets/logo-white.svg';
 
 const Dashboard: React.FC = () => {
   const { user, signOut, updateConsent } = useAuth();
@@ -120,9 +119,11 @@ const Dashboard: React.FC = () => {
       <header className="bg-forest-green shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
-            <div>
-              <h1 className="text-3xl font-bold text-white">EquiSecure</h1>
-              <p className="text-sage-green">Bem-vindo, {user?.full_name || user?.email}</p>
+            <div className="flex items-center space-x-4">
+              <img src={logoWhite} alt="EquiSecure Logo" className="h-25 w-auto" />
+              <div>
+                 <p className="text-sage-green">Bem-vindo, {user?.full_name || user?.email}</p>
+              </div>
             </div>
             <div className="flex items-center space-x-4">
               {user?.role === 'admin' && (
@@ -159,7 +160,7 @@ const Dashboard: React.FC = () => {
 
           {/* Installations List */}
           <div className="bg-white shadow overflow-hidden sm:rounded-md">
-            <div className="px-4 py-5 sm:px-6">
+            <div className="px-4 py-5 sm:px-6 bg-gray-100">
               <h3 className="text-lg leading-6 font-medium text-charcoal">
                 As Suas Explorações
               </h3>

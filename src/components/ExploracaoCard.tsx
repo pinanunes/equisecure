@@ -30,9 +30,12 @@ const ExploracaoCard: React.FC<ExploracaoCardProps> = ({
       <div className="flex items-center justify-between cursor-pointer" onClick={onToggle}>
         <div className="flex items-center space-x-4">
           {/* Risk Circle */}
-          {latestRisk && (
-            <div className={`h-4 w-4 rounded-full ${latestRisk.bgColor}`}></div>
-          )}
+            {latestRisk ? (
+                <div className={`h-4 w-4 rounded-full ${latestRisk.bgColor}`}></div>
+            ) : (
+                <div className="h-4 w-4 rounded-full bg-gray-300"></div> 
+            )}
+  
           
           {/* Name and Type */}
           <div>
