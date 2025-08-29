@@ -97,7 +97,7 @@ const EvaluationReport: React.FC = () => {
   const getRiskLevel = (score: number) => {
     const percentage = score * 100;
     if (percentage <= 25) return { level: 'Baixo', color: 'text-green-600', bgColor: 'bg-green-100' };
-    if (percentage <= 50) return { level: 'Médio', color: 'text-yellow-600', bgColor: 'bg-yellow-100' };
+    if (percentage <= 50) return { level: 'Moderado', color: 'text-yellow-600', bgColor: 'bg-yellow-100' };
     if (percentage <= 75) return { level: 'Alto', color: 'text-orange-600', bgColor: 'bg-orange-100' };
     return { level: 'Muito Alto', color: 'text-red-600', bgColor: 'bg-red-100' };
   };
@@ -234,38 +234,39 @@ const EvaluationReport: React.FC = () => {
 
         {/* Overall Score */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-xl font-bold text-charcoal mb-4">Score Total de Biossegurança</h3>
-          
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${totalRisk.bgColor} ${totalRisk.color}`}>
-                Risco {totalRisk.level}
-              </div>
-              <p className="text-2xl font-bold text-charcoal mt-2">
-                {(evaluation.total_score * 100).toFixed(1)}%
-              </p>
+          <h3 className="text-xl font-bold text-charcoal mb-4 font-serif">Score Total de Biossegurança</h3> {/* I've also added font-serif for style */}
+  
+          {/* 1. New container for the top line (score and percentage) */}
+          <div className="flex items-center justify-between mb-2">
+            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${totalRisk.bgColor} ${totalRisk.color}`}>
+              Risco {totalRisk.level}
             </div>
-            <div className="w-64">
-              <div className="w-full bg-gray-200 rounded-full h-6">
-                <div
-                  className="h-6 rounded-full transition-all duration-300"
-                  style={{
-                    width: `${evaluation.total_score * 100}%`,
-                    backgroundColor: getScoreGradient(evaluation.total_score * 100)
-                  }}
-                />
-              </div>
-            </div>
+            <p className="text-2xl font-bold text-charcoal"> {/* Removed mt-2 */}
+              {(evaluation.total_score * 100).toFixed(1)}%
+            </p>
           </div>
+          
+          {/* 2. Progress bar now has its own full-width container below */}
+          <div className="w-full bg-gray-200 rounded-full h-4 mb-4"> {/* Made the bar a bit slimmer (h-4) */}
+            <div
+              className="h-4 rounded-full transition-all duration-300"
+              style={{
+                width: `${evaluation.total_score * 100}%`,
+                backgroundColor: getScoreGradient(evaluation.total_score * 100)
+              }}
+            />
+          </div>
+  
+
           
           <p className="text-gray-600 text-sm">
             {evaluation.total_score <= 0.25 
-              ? "Excelente! A sua exploração apresenta um nível de risco muito baixo."
+              ? "Excelente! A sua exploração apresenta um nível de risco baixo."
               : evaluation.total_score <= 0.5
               ? "Bom nível de biossegurança, mas há algumas áreas que podem ser melhoradas."
               : evaluation.total_score <= 0.75
-              ? "Nível de risco moderado. Recomendamos implementar as melhorias sugeridas."
-              : "Nível de risco elevado. É importante implementar urgentemente as medidas de biossegurança recomendadas."
+              ? "Nível de risco alto. Recomendamos implementar as melhorias sugeridas."
+              : "Nível de risco muito elevado. É importante implementar urgentemente as medidas de biossegurança recomendadas."
             }
           </p>
         </div>
