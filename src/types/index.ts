@@ -4,6 +4,7 @@ export interface User {
   role: 'user' | 'admin';
   has_given_consent?: boolean;
   created_at: string;
+  full_name: string | null; 
 }
 
 export interface Profile {
@@ -111,4 +112,5 @@ export interface Recommendation {
   question_text: string;
   improvement_tip: string;
   section_name: string;
+  full_name: string; // <-- Add this line
 }

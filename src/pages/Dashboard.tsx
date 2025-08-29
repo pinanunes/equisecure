@@ -1,9 +1,12 @@
+// src/components/ExploracaoCard.tsx
+
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
 import type { Exploracao, Evaluation } from '../types';
 import ConsentModal from '../components/ConsentModal';
+import ExploracaoCard from '../components/ExploracaoCard';
 
 const Dashboard: React.FC = () => {
   const { user, signOut, updateConsent } = useAuth();
@@ -11,6 +14,7 @@ const Dashboard: React.FC = () => {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [loading, setLoading] = useState(true);
   const [showConsentModal, setShowConsentModal] = useState(false);
+  const [openExploracaoId, setOpenExploracaoId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -24,6 +28,7 @@ const Dashboard: React.FC = () => {
       }
     }
   }, [user]);
+
 
   const handleConsent = async () => {
     const { error } = await updateConsent();
@@ -81,9 +86,13 @@ const Dashboard: React.FC = () => {
     await signOut();
     navigate('/login');
   };
-
   const getInstallationEvaluations = (installationId: string) => {
     return evaluations.filter(evaluation => evaluation.installation_id === installationId);
+  };
+
+  // 3. Add a handler to toggle the accordion
+  const handleToggleExploracao = (installationId: string) => {
+    setOpenExploracaoId(prevId => (prevId === installationId ? null : installationId));
   };
 
   const formatDate = (dateString: string) => {
@@ -91,10 +100,11 @@ const Dashboard: React.FC = () => {
   };
 
   const getRiskLevel = (score: number) => {
-    if (score <= 0.3) return { level: 'Baixo', color: 'text-green-600' };
-    if (score <= 0.6) return { level: 'Médio', color: 'text-yellow-600' };
-    return { level: 'Alto', color: 'text-red-600' };
+    if (score <= 0.3) return { level: 'Baixo', color: 'text-green-600', bgColor: 'bg-green-500' };
+    if (score <= 0.6) return { level: 'Médio', color: 'text-yellow-600', bgColor: 'bg-yellow-500' };
+    return { level: 'Alto', color: 'text-red-600', bgColor: 'bg-red-500' };
   };
+
 
   if (loading) {
     return (
@@ -112,7 +122,7 @@ const Dashboard: React.FC = () => {
           <div className="flex justify-between items-center py-6">
             <div>
               <h1 className="text-3xl font-bold text-white">EquiSecure</h1>
-              <p className="text-sage-green">Bem-vindo, {user?.email}</p>
+              <p className="text-sage-green">Bem-vindo, {user?.full_name || user?.email}</p>
             </div>
             <div className="flex items-center space-x-4">
               {user?.role === 'admin' && (
@@ -170,79 +180,20 @@ const Dashboard: React.FC = () => {
               </div>
             ) : (
               <ul className="divide-y divide-gray-200">
+                {/* 4. Replace the old list with the new component */}
                 {exploracoes.map((installation) => {
                   const installationEvaluations = getInstallationEvaluations(installation.id);
                   
                   return (
-                    <li key={installation.id} className="px-4 py-4 sm:px-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-lg font-medium text-charcoal">
-                              {installation.name}
-                            </h4>
-                            <div className="flex items-center space-x-2">
-                              <Link
-                                to={`/evaluate?installation=${installation.id}`}
-                                className="bg-sage-green text-white px-3 py-1 rounded text-sm hover:bg-sage-green-dark"
-                              >
-                                Reavaliar
-                              </Link>
-                            </div>
-                          </div>
-                          
-                          <div className="mt-2 flex items-center text-sm text-gray-500">
-                            {installation.region && (
-                              <span className="mr-4">Região: {installation.region}</span>
-                            )}
-                            {installation.type && (
-                              <span>Tipo: {installation.type}</span>
-                            )}
-                          </div>
-
-                          {/* Evaluation History */}
-                          {installationEvaluations.length > 0 && (
-                            <div className="mt-4">
-                              <h5 className="text-sm font-medium text-charcoal mb-2">
-                                Histórico de Avaliações ({installationEvaluations.length})
-                              </h5>
-                              <div className="space-y-2">
-                                {installationEvaluations.slice(0, 3).map((evaluation) => {
-                                  const risk = getRiskLevel(evaluation.total_score);
-                                  return (
-                                    <div key={evaluation.id} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded">
-                                      <div className="flex items-center space-x-4">
-                                        <span className="text-sm text-gray-600">
-                                          {formatDate(evaluation.created_at)}
-                                        </span>
-                                        <span className={`text-sm font-medium ${risk.color}`}>
-                                          Risco {risk.level}
-                                        </span>
-                                        <span className="text-sm text-gray-600">
-                                          Score: {(evaluation.total_score * 100).toFixed(1)}%
-                                        </span>
-                                      </div>
-                                      <Link
-                                        to={`/evaluation-report/${evaluation.id}`}
-                                        state={{ from: '/dashboard' }}
-                                        className="text-forest-green hover:text-forest-green-dark text-sm font-medium"
-                                      >
-                                        Ver Relatório
-                                      </Link>
-                                    </div>
-                                  );
-                                })}
-                                {installationEvaluations.length > 3 && (
-                                  <div className="text-sm text-gray-500 text-center">
-                                    ... e mais {installationEvaluations.length - 3} avaliações
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </li>
+                    <ExploracaoCard
+                      key={installation.id}
+                      installation={installation}
+                      evaluations={installationEvaluations}
+                      isOpen={openExploracaoId === installation.id}
+                      onToggle={() => handleToggleExploracao(installation.id)}
+                      getRiskLevel={getRiskLevel}
+                      formatDate={formatDate}
+                    />
                   );
                 })}
               </ul>

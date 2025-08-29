@@ -7,7 +7,7 @@ interface AuthContextType {
   user: AppUser | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<{ error: any }>;
   resetPassword: (email: string) => Promise<{ error: any }>;
@@ -29,7 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Centralized user profile fetching
+  // This function is correct from your code. No changes needed here.
   const fetchUserProfile = async (authUser: User | null) => {
     if (!authUser) {
       setUser(null);
@@ -45,10 +45,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error && error.code === 'PGRST116') {
-        // Profile doesn't exist, create it
         const { data: newUser, error: insertError } = await supabase
           .from('profiles')
-          .insert([{ id: authUser.id, email: authUser.email, role: 'user' }])
+          .insert([{ id: authUser.id, email: authUser.email, role: 'user', full_name: authUser.user_metadata.full_name }])
           .select()
           .single();
         
@@ -61,40 +60,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('Error fetching or creating user profile:', error);
-      // In case of error, ensure user is logged out to avoid inconsistent states
       setUser(null);
       await supabase.auth.signOut();
     } finally {
-      // This is the crucial part: ensure loading is always set to false
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    // On initial load, get the session and set up the listener
-    // This will fire once with the initial session state
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('Auth state change detected:', event, session);
       setSession(session);
       fetchUserProfile(session?.user ?? null);
     });
 
-    // Cleanup function to unsubscribe from the listener
     return () => {
       subscription.unsubscribe();
     };
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, []);
 
-  // ... (rest of your functions: signUp, signIn, etc.)
-  const signUp = async (email: string, password: string) => {
+  // --- FIX IS HERE ---
+  // 1. Correctly implement the signUp function
+  const signUp = async (email: string, password: string, fullName: string) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
+      // The options object with the user's name belongs here
+      options: {
+        data: {
+          full_name: fullName,
+        },
+      },
     });
     return { error };
   };
 
+  // --- AND HERE ---
+  // 2. Restore the signIn function to its original state
   const signIn = async (email: string, password: string) => {
+    // No 'options' or 'fullName' here
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -130,7 +134,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error };
       }
 
-      // Update local user state
       setUser(prev => prev ? { ...prev, has_given_consent: true } : null);
       return { error: null };
     } catch (error) {

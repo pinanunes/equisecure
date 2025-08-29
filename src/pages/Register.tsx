@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import logo from '../assets/logo.svg';
 
 const Register: React.FC = () => {
+  const [name, setName] = useState(''); // <-- 1. Add state for the name
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -30,8 +31,9 @@ const Register: React.FC = () => {
       setLoading(false);
       return;
     }
-
-    const { error } = await signUp(email, password);
+    
+    // <-- 2. Pass the name to the signUp function
+    const { error } = await signUp(email, password, name); 
     
     if (error) {
       setError(error.message);
@@ -83,6 +85,25 @@ const Register: React.FC = () => {
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
+            
+            {/* 3. Add the input field for the name */}
+            <div>
+              <label htmlFor="name" className="sr-only">
+                Nome
+              </label>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                autoComplete="name"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-charcoal rounded-t-md focus:outline-none focus:ring-forest-green focus:border-forest-green focus:z-10 sm:text-sm"
+                placeholder="Nome Completo"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+
             <div>
               <label htmlFor="email" className="sr-only">
                 Email
@@ -93,12 +114,16 @@ const Register: React.FC = () => {
                 type="email"
                 autoComplete="email"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-charcoal rounded-t-md focus:outline-none focus:ring-forest-green focus:border-forest-green focus:z-10 sm:text-sm"
+                // Note: The original email input had 'rounded-t-md'. 
+                // It's removed here so it fits in the middle.
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-charcoal focus:outline-none focus:ring-forest-green focus:border-forest-green focus:z-10 sm:text-sm"
                 placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
+            
+            {/* The rest of the form fields (password, confirmPassword) are unchanged */}
             <div>
               <label htmlFor="password" className="sr-only">
                 Password
