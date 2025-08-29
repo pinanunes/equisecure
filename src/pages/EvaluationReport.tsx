@@ -98,8 +98,8 @@ const EvaluationReport: React.FC = () => {
     const percentage = score * 100;
     if (percentage <= 25) return { level: 'Baixo', color: 'text-green-600', bgColor: 'bg-green-100' };
     if (percentage <= 50) return { level: 'Moderado', color: 'text-yellow-600', bgColor: 'bg-yellow-100' };
-    if (percentage <= 75) return { level: 'Alto', color: 'text-orange-600', bgColor: 'bg-orange-100' };
-    return { level: 'Muito Alto', color: 'text-red-600', bgColor: 'bg-red-100' };
+    if (percentage <= 75) return { level: 'Elevado', color: 'text-orange-600', bgColor: 'bg-orange-100' };
+    return { level: 'Muito Elevado', color: 'text-red-600', bgColor: 'bg-red-100' };
   };
 
   const generateImprovementRecommendations = () => {
@@ -263,9 +263,9 @@ const EvaluationReport: React.FC = () => {
             {evaluation.total_score <= 0.25 
               ? "Excelente! A sua exploração apresenta um nível de risco baixo."
               : evaluation.total_score <= 0.5
-              ? "Bom nível de biossegurança, mas há algumas áreas que podem ser melhoradas."
+              ? "Nível razoável de biossegurança, cpm algumas áreas que podem ser melhoradas."
               : evaluation.total_score <= 0.75
-              ? "Nível de risco alto. Recomendamos implementar as melhorias sugeridas."
+              ? "Nível de risco elevado. Recomendamos implementar as melhorias sugeridas."
               : "Nível de risco muito elevado. É importante implementar urgentemente as medidas de biossegurança recomendadas."
             }
           </p>

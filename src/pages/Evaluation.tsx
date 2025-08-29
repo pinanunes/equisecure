@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,7 +37,9 @@ const Evaluation: React.FC = () => {
   const [sectionScores, setSectionScores] = useState<SectionScore[]>([]);
   const [totalScore, setTotalScore] = useState({ current: 0, max: 0, percentage: 0 });
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
-  
+  const topOfContentRef = useRef<HTMLDivElement>(null);
+  const sectionNavContainerRef = useRef<HTMLDivElement>(null);
+  const sectionButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   // Exploração management state
   const [exploracaoId, setExploracaoId] = useState<string | null>(null);
   const [showExploracaoForm, setShowExploracaoForm] = useState(false);
@@ -48,6 +50,33 @@ const Evaluation: React.FC = () => {
   });
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [unansweredCount, setUnansweredCount] = useState(0);
+
+  useEffect(() => {
+    // This will run every time the section changes
+    topOfContentRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [currentSectionIndex]);  
+
+  useEffect(() => {
+    const navContainer = sectionNavContainerRef.current;
+    const activeButton = sectionButtonRefs.current[currentSectionIndex];
+
+    if (navContainer && activeButton) {
+      // Calculate the center of the container
+      const containerCenter = navContainer.offsetWidth / 2;
+      
+      // Calculate the center of the active button relative to the container
+      const buttonCenter = activeButton.offsetLeft + activeButton.offsetWidth / 2;
+      
+      // Calculate the position to scroll to
+      const scrollToPosition = buttonCenter - containerCenter;
+
+      // Perform the scroll
+      navContainer.scrollTo({
+        left: scrollToPosition,
+        behavior: 'smooth'
+      });
+    }
+  }, [currentSectionIndex]);
 
   useEffect(() => {
     fetchActiveQuestionnaire();
@@ -480,7 +509,7 @@ const Evaluation: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-cream">
-      <div className="container mx-auto px-4 py-8">
+      <div ref={topOfContentRef} className="container mx-auto px-4 py-8"> {/* <--- THE CHANGE IS HERE */}
         {/* Header */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
@@ -501,7 +530,7 @@ const Evaluation: React.FC = () => {
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-medium text-charcoal">Score Total de Risco</span>
               <span className="text-sm font-medium text-charcoal">
-                {totalScore.current.toFixed(1)} / {totalScore.max.toFixed(1)} ({totalScore.percentage.toFixed(1)}%)
+                {totalScore.percentage.toFixed(1)}%
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-4">
@@ -515,12 +544,17 @@ const Evaluation: React.FC = () => {
             </div>
           </div>
 
-          {/* Section Navigation */}
-          <div className="flex space-x-2 overflow-x-auto">
+          {/* Section Navigation -- THIS IS THE CORRECTED BLOCK */}
+          <div 
+            ref={sectionNavContainerRef}
+            className="flex space-x-2 overflow-x-auto pb-2"
+          >
             {questionnaire.sections.map((section, index) => {
               const sectionScore = sectionScores.find(s => s.sectionId === section.id);
               return (
                 <button
+                  // This is the corrected ref syntax
+                  ref={(el) => { sectionButtonRefs.current[index] = el; }}
                   key={section.id}
                   onClick={() => setCurrentSectionIndex(index)}
                   className={`px-4 py-2 rounded-md whitespace-nowrap text-sm font-medium transition-colors ${
@@ -539,7 +573,7 @@ const Evaluation: React.FC = () => {
               );
             })}
           </div>
-        </div>
+        </div> {/* <--- THIS IS THE CLOSING DIV THAT WAS LIKELY MISSING */}
 
         {/* Current Section */}
         {currentSection && (
@@ -553,7 +587,7 @@ const Evaluation: React.FC = () => {
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm font-medium text-charcoal">Score da Secção</span>
                     <span className="text-sm font-medium text-charcoal">
-                      {currentSectionScore.currentScore.toFixed(1)} / {currentSectionScore.maxScore.toFixed(1)} ({currentSectionScore.percentage.toFixed(1)}%)
+                      {currentSectionScore.percentage.toFixed(1)}%
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">
@@ -597,7 +631,7 @@ const Evaluation: React.FC = () => {
                               className="w-4 h-4 text-forest-green focus:ring-forest-green"
                             />
                             <span className="text-charcoal">{option.text}</span>
-                            <span className="text-sm text-gray-500">(Score: {option.score})</span>
+                            
                           </label>
                         ))}
                       </div>
@@ -626,7 +660,7 @@ const Evaluation: React.FC = () => {
                               className="w-4 h-4 text-forest-green focus:ring-forest-green rounded"
                             />
                             <span className="text-charcoal">{option.text}</span>
-                            <span className="text-sm text-gray-500">(Score: {option.score})</span>
+                            
                           </label>
                         ))}
                       </div>
@@ -645,7 +679,26 @@ const Evaluation: React.FC = () => {
                 );
               })}
             </div>
-
+            {currentSectionScore && (
+                <div className="mt-12 mb-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-charcoal">Score da Secção</span>
+                    <span className="text-sm font-medium text-charcoal">
+                      {currentSectionScore.percentage.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div
+                      className="h-3 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${currentSectionScore.percentage}%`,
+                        backgroundColor: getScoreGradient(currentSectionScore.percentage)
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            
             {/* Navigation */}
             <div className="flex justify-between mt-8">
               <button
