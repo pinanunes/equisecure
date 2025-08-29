@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import type { Questionnaire, Section, Question, QuestionOption } from '../types';
+import ConfirmationModal from '../components/ConfirmationModal'; // 1. Import the new component
+
 
 interface QuestionnaireWithSections extends Questionnaire {
   sections: (Section & {
@@ -44,6 +46,8 @@ const Evaluation: React.FC = () => {
     region: '',
     type: ''
   });
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [unansweredCount, setUnansweredCount] = useState(0);
 
   useEffect(() => {
     fetchActiveQuestionnaire();
@@ -333,6 +337,38 @@ const Evaluation: React.FC = () => {
       console.error('Error in handleCompleteEvaluation:', error);
       alert('Erro ao concluir avaliação. Tente novamente.');
     }
+  };
+
+  const handleAttemptSubmit = () => {
+    if (!questionnaire) return;
+
+    // Calculate total questions
+    const totalQuestions = questionnaire.sections.reduce((sum, section) => sum + section.questions.length, 0);
+
+    // Calculate answered questions (a question is answered if it has selected options or non-empty text)
+    const answeredQuestions = answers.filter(a => 
+      (a.selectedOptions && a.selectedOptions.length > 0) || (a.textAnswer && a.textAnswer.trim() !== '')
+    ).length;
+
+    const unanswered = totalQuestions - answeredQuestions;
+    setUnansweredCount(unanswered);
+
+    if (unanswered > 0) {
+      // If there are unanswered questions, show the modal
+      setShowConfirmationModal(true);
+    } else {
+      // If all questions are answered, proceed directly
+      handleCompleteEvaluation();
+    }
+  };
+
+    const handleConfirmSubmit = () => {
+    setShowConfirmationModal(false);
+    handleCompleteEvaluation(); // Proceed with submission
+  };
+
+  const handleCancelSubmit = () => {
+    setShowConfirmationModal(false); // Just close the modal
   };
 
   if (loading) {
@@ -629,7 +665,7 @@ const Evaluation: React.FC = () => {
                 </button>
               ) : (
                 <button
-                  onClick={handleCompleteEvaluation}
+                  onClick={handleAttemptSubmit} // <-- Change to the new handler
                   className="bg-golden-yellow text-charcoal px-4 py-2 rounded-md hover:bg-golden-yellow-dark font-medium"
                 >
                   Concluir Avaliação
@@ -639,6 +675,17 @@ const Evaluation: React.FC = () => {
           </div>
         )}
       </div>
+      {/* 5. Add the modal to be rendered */}
+      <ConfirmationModal
+        isOpen={showConfirmationModal}
+        onConfirm={handleConfirmSubmit}
+        onCancel={handleCancelSubmit}
+        title="Atenção: Perguntas por Responder"
+      >
+        <p>Ainda tem {unansweredCount} {unansweredCount === 1 ? 'pergunta por responder' : 'perguntas por responder'}.</p>
+        <p className="mt-2">A avaliação não estará completa sem responder a essas perguntas.</p>
+        <p className="mt-4 font-medium">Pretende continuar?</p>
+      </ConfirmationModal>
     </div>
   );
 };
