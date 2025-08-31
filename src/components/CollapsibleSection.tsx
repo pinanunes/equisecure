@@ -10,7 +10,7 @@ interface CollapsibleSectionProps {
 const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, isOpen, onToggle, children }) => {
   return (
     <div className="bg-white rounded-lg shadow-md mb-6">
-      {/* O cabeçalho clicável */}
+      {/* O cabeçalho clicável (permanece o mesmo) */}
       <button
         onClick={onToggle}
         className="w-full flex justify-between items-center p-6 text-left"
@@ -28,16 +28,23 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, isOpen, 
         </svg>
       </button>
 
-      {/* O conteúdo colapsável */}
+      {/* --- A ALTERAÇÃO ESTÁ AQUI --- */}
+      {/* O conteúdo colapsável, agora usando a técnica de grid */}
       <div
-        className={`overflow-hidden transition-all duration-500 ease-in-out ${
-          isOpen ? 'max-h-[2000px]' : 'max-h-0' // max-h grande para não cortar conteúdo
+        className={`grid transition-all duration-500 ease-in-out ${
+          // Quando está aberto, definimos as linhas da grelha para '1fr' (uma fração do espaço, ou seja, altura automática)
+          // Quando está fechado, definimos para '0fr' (altura zero)
+          isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
         }`}
       >
-        <div className="px-6 pb-6">
-          {children}
+        {/* Este 'div' interior é crucial para que a animação funcione corretamente */}
+        <div className="overflow-hidden">
+          <div className="px-6 pb-6 pt-2"> {/* Adicionado um pt-2 para um pequeno espaçamento */}
+            {children}
+          </div>
         </div>
       </div>
+      {/* --- FIM DA ALTERAÇÃO --- */}
     </div>
   );
 };
