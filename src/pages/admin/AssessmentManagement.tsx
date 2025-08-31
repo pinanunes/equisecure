@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import AdminLayout from '../../components/AdminLayout';
 import type { Evaluation, Exploracao } from '../../types';
+import PlanEditorModal from '../../components/PlanEditorModal';
 
 interface AssessmentWithDetails extends Evaluation {
   installation: Exploracao;
@@ -14,10 +15,61 @@ const AssessmentManagement: React.FC = () => {
   const [assessments, setAssessments] = useState<AssessmentWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedAssessment, setSelectedAssessment] = useState<AssessmentWithDetails | null>(null);
 
   useEffect(() => {
     fetchAssessments();
   }, []);
+
+  useEffect(() => {
+    // Encontra o PRIMEIRO assessment que está no estado 'generating'.
+    // Isto evita que o poller se confunda se houver múltiplos.
+    const assessmentToPoll = assessments.find(a => a.plan_status === 'generating');
+     if (!assessmentToPoll) return;
+    // Se não houver nenhum assessment a gerar, não fazemos nada e garantimos que o intervalo é limpo.
+    if (!assessmentToPoll) {
+        return;
+    }
+
+    console.log(`POLLER ATIVADO para o assessment ID: ${assessmentToPoll.id}`);
+
+    const intervalId = setInterval(async () => {
+        try {
+            const { data, error } = await supabase
+                .from('evaluations')
+                .select('plan_status, plan_markdown, plan_actionable_measures')
+                .eq('id', assessmentToPoll.id)
+                .single();
+
+            if (error) throw error;
+
+            if (data && data.plan_status !== 'generating') {
+                console.log(`Polling bem-sucedido para ${assessmentToPoll.id}! Novo estado: ${data.plan_status}`);
+                clearInterval(intervalId);
+
+                // Em vez de chamar fetchAssessments() de novo,
+                // simplesmente atualizamos o assessment específico que mudou.
+                // Isto é mais eficiente e evita re-renders desnecessários.
+                setAssessments(currentAssessments =>
+                    currentAssessments.map(a =>
+                        a.id === assessmentToPoll.id
+                            ? { ...a, ...data } // Faz o merge dos novos dados
+                            : a
+                    )
+                );
+            } else {
+                console.log(`Ainda a gerar para ${assessmentToPoll.id}...`);
+            }
+        } catch (error) {
+            console.error('Erro durante o polling:', error);
+            clearInterval(intervalId);
+        }
+    }, 5000); // 5 segundos
+
+    return () => clearInterval(intervalId);
+
+}, [assessments]); // O poller reavalia sempre que a lista de assessments muda.
 
   const fetchAssessments = async () => {
     try {
@@ -63,6 +115,124 @@ const AssessmentManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOpenModal = (assessment: AssessmentWithDetails) => {
+    setSelectedAssessment(assessment);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedAssessment(null);
+  };
+
+  const handleSaveChanges = async (markdown: string) => {
+    if (!selectedAssessment) return;
+    try {
+      const { data, error } = await supabase
+        .from('evaluations')
+        .update({ plan_markdown: markdown, plan_status: 'draft' }) // Garante que fica como draft
+        .eq('id', selectedAssessment.id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Atualizar o estado local
+      setAssessments(prev => prev.map(a => a.id === selectedAssessment.id ? { ...a, ...data } : a));
+      alert('Rascunho guardado com sucesso!');
+      handleCloseModal();
+    } catch (error) {
+      alert('Erro ao guardar as alterações.');
+      console.error(error);
+    }
+  };
+
+  const handlePublishPlan = async (markdown: string) => {
+    if (!selectedAssessment) return;
+    if (!window.confirm('Tem a certeza que quer publicar este plano? Esta ação é irreversível.')) {
+        return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('evaluations')
+        .update({ plan_markdown: markdown, plan_status: 'published' }) // Muda o estado para published
+        .eq('id', selectedAssessment.id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      setAssessments(prev => prev.map(a => a.id === selectedAssessment.id ? { ...a, ...data } : a));
+      alert('Plano publicado com sucesso!');
+      handleCloseModal();
+    } catch (error) {
+      alert('Erro ao publicar o plano.');
+      console.error(error);
+    }
+  };
+  const handleCreatePlan = async (assessment: AssessmentWithDetails) => {
+    if (!assessment) return;
+
+    try {
+        // Passo 1: Atualizar o estado na UI e na BD para 'generating'.
+        // Isto aciona o nosso useEffect de polling para começar a trabalhar.
+        setAssessments(prev => prev.map(a => a.id === assessment.id ? { ...a, plan_status: 'generating' } : a));
+        const { error: updateError } = await supabase
+            .from('evaluations')
+            .update({ plan_status: 'generating' })
+            .eq('id', assessment.id);
+        if (updateError) throw updateError;
+        
+        // Passo 2: Construir e enviar o payload para o N8N.
+        // (O seu código para obter rawData e construir o payload permanece o mesmo)
+        const { data: rawData, error: fetchError } = await supabase.from('evaluations').select(`*, installation:installations(*), evaluation_answers(question_id, selected_options, text_answer), questionnaire:questionnaires(*, sections(*, questions(*, options:question_options(*))))`).eq('id', assessment.id).single();
+        if (fetchError) throw fetchError;
+        const payload = { avaliacao_id: assessment.id, exploracao: { id: rawData.installation.id, nome: rawData.installation.name, tipo: rawData.installation.type, regiao: rawData.installation.region, }, avaliacao_scores: { total_score_percentagem: (rawData.total_score * 100), seccoes: rawData.section_scores.map((sc: any) => ({ nome: rawData.questionnaire.sections.find((s: any) => s.id === sc.section_id)?.name, score_percentagem: (sc.score * 100), })) }, respostas_detalhadas: rawData.questionnaire.sections.map((section: any) => ({ seccao: section.name, perguntas: section.questions.map((q: any) => { const answer = rawData.evaluation_answers.find((a: any) => a.question_id === q.id); let respostaTexto = "Sem resposta"; if(answer){ if(q.type === 'text') respostaTexto = answer.text_answer || "Sem resposta"; else if(answer.selected_options) { respostaTexto = q.options.filter((opt: any) => answer.selected_options.includes(opt.id)).map((opt: any) => opt.text).join(', '); } } return { texto: q.text, resposta: respostaTexto, score: q.score }; }) })) };
+        
+        const webhookUrl = 'https://manuelnunes.duckdns.org/webhook/eb8add01-d6e3-4e47-a6f2-14bc52d828ac';
+        const response = await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), });
+
+        if (!response.ok) {
+            throw new Error(`Webhook failed with status ${response.status}`);
+        }
+    } catch (error) {
+        console.error('Error creating plan:', error);
+        alert('Ocorreu um erro ao iniciar a geração do plano. Por favor, tente novamente.');
+        // Reverter o estado na UI e na BD em caso de erro.
+        setAssessments(prev => prev.map(a => a.id === assessment.id ? { ...a, plan_status: 'not_generated' } : a));
+        await supabase.from('evaluations').update({ plan_status: 'not_generated' }).eq('id', assessment.id);
+    }
+};
+
+const renderPlanButton = (assessment: AssessmentWithDetails) => {
+    const status = assessment.plan_status;
+
+    if (status === 'generating') {
+      return <span className="text-sm text-gray-500 italic">A Gerar Plano...</span>;
+    }
+
+    if (status === 'draft' || status === 'published') {
+      return (
+        <button 
+          onClick={() => handleOpenModal(assessment)}
+          className="bg-sage-green text-white px-3 py-1 rounded-md text-sm hover:bg-sage-green-dark" 
+        >
+          {status === 'published' ? 'Ver Plano Publicado' : 'Rever e Publicar'}
+        </button>
+      );
+    }
+    
+    // Default é 'not_generated'
+    return (
+      <button 
+        onClick={() => handleCreatePlan(assessment)}
+        className="bg-forest-green text-white px-3 py-1 rounded-md text-sm hover:bg-forest-green-dark"
+      >
+        Criar Plano
+      </button>
+    );
   };
 
   const formatDate = (dateString: string) => {
@@ -335,6 +505,9 @@ const AssessmentManagement: React.FC = () => {
                       Score
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Plano de Ação
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Ações
                     </th>
                   </tr>
@@ -370,6 +543,9 @@ const AssessmentManagement: React.FC = () => {
                               ({risk.level})
                             </span>
                           </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          {renderPlanButton(assessment)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <Link
@@ -417,6 +593,15 @@ const AssessmentManagement: React.FC = () => {
             </div>
           </div>
         </div>
+       {/* 5. Renderizar o Modal no final */}
+      <PlanEditorModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onSave={handleSaveChanges}
+        onPublish={handlePublishPlan}
+        initialMarkdown={selectedAssessment?.plan_markdown || ''}
+        status={selectedAssessment?.plan_status}
+      />
       </div>
     </AdminLayout>
   );

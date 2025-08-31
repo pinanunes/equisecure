@@ -3,6 +3,9 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import type { Evaluation, Exploracao, Questionnaire, Section, Question, QuestionOption } from '../types';
+import ReportRenderer from '../components/ReportRenderer'; 
+import FeedbackSection from '../components/FeedbackSection'; 
+import CollapsibleSection from '../components/CollapsibleSection';
 
 interface EvaluationWithDetails extends Evaluation {
   installation: Exploracao;
@@ -37,6 +40,17 @@ const EvaluationReport: React.FC = () => {
       fetchEvaluationReport();
     }
   }, [evaluationId]);
+  
+  const handleToggleSection = (sectionName: string) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [sectionName]: !prev[sectionName]
+    }));
+  };
+
+  const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
+    plano: true, 
+  });
 
   const fetchEvaluationReport = async () => {
     try {
@@ -193,234 +207,175 @@ const EvaluationReport: React.FC = () => {
   // Get the return path from navigation state, fallback to role-based default
   const from = location.state?.from || (user?.role === 'admin' ? '/admin/assessments' : '/dashboard');
 
+// src/pages/EvaluationReport.tsx
+
+// ... (todo o seu código antes da secção return permanece o mesmo) ...
+
   return (
     <div className="min-h-screen bg-cream">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
+        {/* Cabeçalho e Score Geral - Estes permanecem sempre visíveis */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex justify-between items-start mb-4">
             <div>
               <h1 className="text-3xl font-bold text-charcoal mb-2">Relatório de Avaliação</h1>
               <h2 className="text-xl text-gray-700 mb-1">{evaluation.installation.name}</h2>
-              <p className="text-gray-600">
-                Avaliado em {formatDate(evaluation.created_at)}
-              </p>
-              {evaluation.installation.region && (
-                <p className="text-sm text-gray-500">Região: {evaluation.installation.region}</p>
-              )}
-              {evaluation.installation.type && (
-                <p className="text-sm text-gray-500">Tipo: {evaluation.installation.type}</p>
-              )}
+              <p className="text-gray-600">Avaliado em {formatDate(evaluation.created_at)}</p>
+              {evaluation.installation.region && <p className="text-sm text-gray-500">Região: {evaluation.installation.region}</p>}
+              {evaluation.installation.type && <p className="text-sm text-gray-500">Tipo: {evaluation.installation.type}</p>}
             </div>
             <div className="flex space-x-3">
-              {/* Only show Reavaliar button for non-admin users */}
-              {user?.role !== 'admin' && (
-                <button
-                  onClick={() => navigate(`/evaluate?installation=${evaluation.installation.id}`)}
-                  className="bg-sage-green text-white px-4 py-2 rounded-md hover:bg-sage-green-dark"
-                >
-                  Reavaliar
-                </button>
-              )}
-              <button
-                onClick={() => navigate(from)}
-                className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
-              >
-                Voltar
-              </button>
+              {user?.role !== 'admin' && <button onClick={() => navigate(`/evaluate?installation=${evaluation.installation.id}`)} className="bg-sage-green text-white px-4 py-2 rounded-md hover:bg-sage-green-dark">Reavaliar</button>}
+              <button onClick={() => navigate(from)} className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600">Voltar</button>
             </div>
           </div>
         </div>
 
-        {/* Overall Score */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-xl font-bold text-charcoal mb-4">Score Total de Biossegurança</h3> {/* I've also added font-serif for style */}
-  
-          {/* 1. New container for the top line (score and percentage) */}
+          <h3 className="text-xl font-bold text-charcoal mb-4">Score Total de Biossegurança</h3>
           <div className="flex items-center justify-between mb-2">
-            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${totalRisk.bgColor} ${totalRisk.color}`}>
-              Risco {totalRisk.level}
-            </div>
-            <p className="text-2xl font-bold text-charcoal"> {/* Removed mt-2 */}
-              {(evaluation.total_score * 100).toFixed(1)}%
-            </p>
+            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${totalRisk.bgColor} ${totalRisk.color}`}>Risco {totalRisk.level}</div>
+            <p className="text-2xl font-bold text-charcoal">{(evaluation.total_score * 100).toFixed(1)}%</p>
           </div>
-          
-          {/* 2. Progress bar now has its own full-width container below */}
-          <div className="w-full bg-gray-200 rounded-full h-4 mb-4"> {/* Made the bar a bit slimmer (h-4) */}
-            <div
-              className="h-4 rounded-full transition-all duration-300"
-              style={{
-                width: `${evaluation.total_score * 100}%`,
-                backgroundColor: getScoreGradient(evaluation.total_score * 100)
-              }}
-            />
+          <div className="w-full bg-gray-200 rounded-full h-4 mb-4">
+            <div className="h-4 rounded-full transition-all duration-300" style={{ width: `${evaluation.total_score * 100}%`, backgroundColor: getScoreGradient(evaluation.total_score * 100) }} />
           </div>
-  
-
-          
           <p className="text-gray-600 text-sm">
-            {evaluation.total_score <= 0.25 
-              ? "Excelente! A sua exploração apresenta um nível de risco baixo."
-              : evaluation.total_score <= 0.5
-              ? "Nível razoável de biossegurança, cpm algumas áreas que podem ser melhoradas."
-              : evaluation.total_score <= 0.75
-              ? "Nível de risco elevado. Recomendamos implementar as melhorias sugeridas."
-              : "Nível de risco muito elevado. É importante implementar urgentemente as medidas de biossegurança recomendadas."
-            }
+            {evaluation.total_score <= 0.25 ? "Excelente! A sua exploração apresenta um nível de risco baixo." : evaluation.total_score <= 0.5 ? "Nível razoável de biossegurança, cpm algumas áreas que podem ser melhoradas." : evaluation.total_score <= 0.75 ? "Nível de risco elevado. Recomendamos implementar as melhorias sugeridas." : "Nível de risco muito elevado. É importante implementar urgentemente as medidas de biossegurança recomendadas."}
           </p>
         </div>
 
-        {/* Section Scores */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-xl font-bold text-charcoal mb-4">Avaliação por Secção</h3>
-          
+        {/* --- NOVA ESTRUTURA COLAPSÁVEL COMEÇA AQUI --- */}
+
+        {/* 1. Avaliação por Secção */}
+        <CollapsibleSection
+          title="Avaliação por Secção"
+          isOpen={!!openSections.scores}
+          onToggle={() => handleToggleSection('scores')}
+        >
           <div className="space-y-4">
             {evaluation.questionnaire.sections.map(section => {
               const sectionScore = sectionScores.find(s => s.section_id === section.id);
               const score = sectionScore?.score || 0;
               const risk = getRiskLevel(score);
-              
               return (
                 <div key={section.id} className="border border-gray-200 rounded-lg p-4">
                   <div className="flex justify-between items-center mb-2">
                     <h4 className="font-medium text-charcoal">{section.name}</h4>
-                    <div className={`px-2 py-1 rounded text-xs font-medium ${risk.bgColor} ${risk.color}`}>
-                      {risk.level}
-                    </div>
+                    <div className={`px-2 py-1 rounded text-xs font-medium ${risk.bgColor} ${risk.color}`}>{risk.level}</div>
                   </div>
-                  
                   <div className="flex items-center space-x-4">
                     <div className="flex-1">
                       <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div
-                          className="h-3 rounded-full transition-all duration-300"
-                          style={{
-                            width: `${score * 100}%`,
-                            backgroundColor: getScoreGradient(score * 100)
-                          }}
-                        />
+                        <div className="h-3 rounded-full transition-all duration-300" style={{ width: `${score * 100}%`, backgroundColor: getScoreGradient(score * 100) }} />
                       </div>
                     </div>
-                    <span className="text-sm font-medium text-charcoal min-w-0">
-                      {(score * 100).toFixed(1)}%
-                    </span>
+                    <span className="text-sm font-medium text-charcoal min-w-0">{(score * 100).toFixed(1)}%</span>
                   </div>
                 </div>
               );
             })}
           </div>
-        </div>
+        </CollapsibleSection>
 
-        {/* Improvement Recommendations */}
-        {recommendations.length > 0 && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h3 className="text-xl font-bold text-charcoal mb-4">
-              Recomendações de Melhoria ({recommendations.length})
-            </h3>
-            
-            <div className="space-y-4">
-              {recommendations.map((rec, index) => (
-                <div key={index} className="border-l-4 border-golden-yellow bg-golden-yellow bg-opacity-10 p-4 rounded-r-lg">
-                  <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0">
-                      <div className="w-6 h-6 bg-golden-yellow rounded-full flex items-center justify-center">
-                        <span className="text-xs font-bold text-charcoal">{index + 1}</span>
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-charcoal mb-1">{rec.section}</h4>
-                      <p className="text-sm text-gray-700 mb-2">{rec.question}</p>
-                      <div className="bg-white rounded p-3 border border-gray-200">
-                        <p className="text-sm text-gray-600 mb-2">
-                          <strong>Resposta atual:</strong> {rec.currentAnswer}
-                        </p>
-                        <p className="text-sm text-forest-green">
-                          <strong>Recomendação:</strong> {rec.recommendation}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            {recommendations.length === 0 && (
-              <div className="text-center py-8">
-                <div className="text-green-600 text-4xl mb-4">✓</div>
-                <h4 className="text-lg font-medium text-charcoal mb-2">Parabéns!</h4>
-                <p className="text-gray-600">
-                  A sua exploração já implementa as melhores práticas de biossegurança em todas as áreas avaliadas.
-                </p>
-              </div>
-            )}
-          </div>
+        {/* 2. Plano de Ação Publicado */}
+        {evaluation.plan_status === 'published' && evaluation.plan_markdown && (
+          <CollapsibleSection
+            title="Plano de Ação Personalizado (Validado)"
+            isOpen={!!openSections.plano}
+            onToggle={() => handleToggleSection('plano')}
+          >
+            <ReportRenderer markdownContent={evaluation.plan_markdown} />
+          </CollapsibleSection>
         )}
 
-        {/* Admin-only: Detailed Questions and Answers */}
+        {/* 3. Secção de Feedback (não colapsável) */}
+        {evaluation.plan_status === 'published' && evaluation.plan_actionable_measures && (
+          <FeedbackSection
+            evaluationId={evaluation.id}
+            actionableMeasures={evaluation.plan_actionable_measures}
+          />
+        )}
+
+        {/* 4. Secções de Administrador */}
         {user?.role === 'admin' && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-xl font-bold text-charcoal mb-4">
-              Respostas Detalhadas (Visualização de Administrador)
-            </h3>
-            
-            <div className="space-y-6">
-              {evaluation.questionnaire.sections.map((section, sectionIndex) => (
-                <div key={section.id} className="border border-gray-200 rounded-lg p-4">
-                  <h4 className="text-lg font-semibold text-charcoal mb-4 border-b border-gray-200 pb-2">
-                    {sectionIndex + 1}. {section.name}
-                  </h4>
-                  
-                  <div className="space-y-4">
-                    {section.questions?.map((question, questionIndex) => {
-                      const answer = evaluation.evaluation_answers.find(a => a.question_id === question.id);
-                      
-                      let answerText = 'Sem resposta';
-                      if (answer) {
-                        if (question.type === 'text') {
-                          answerText = answer.text_answer || 'Sem resposta';
-                        } else if (answer.selected_options) {
-                          const selectedOptions = question.options?.filter(opt => 
-                            answer.selected_options?.includes(opt.id)
-                          ) || [];
-                          answerText = selectedOptions.map(opt => opt.text).join(', ') || 'Sem resposta';
-                        }
-                      }
-                      
-                      return (
-                        <div key={question.id} className="bg-gray-50 rounded p-3">
-                          <div className="mb-2">
-                            <span className="text-sm font-medium text-gray-700">
-                              {sectionIndex + 1}.{questionIndex + 1}
-                            </span>
-                            <p className="text-sm text-charcoal mt-1">{question.text}</p>
-                          </div>
-                          
-                          <div className="border-l-3 border-blue-400 pl-3">
-                            <p className="text-sm text-gray-700">
-                              <strong>Resposta:</strong> {answerText}
-                            </p>
-                            {question.type !== 'text' && answer?.selected_options && (
-                              <div className="mt-2">
-                                {question.options?.filter(opt => 
-                                  answer.selected_options?.includes(opt.id)
-                                ).map(opt => (
-                                  <span key={opt.id} className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-2 mb-1">
-                                    Score: {opt.score}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
+          <>
+            {/* 4a. Recomendações (Rascunho AI) */}
+            {recommendations.length > 0 && (
+              <CollapsibleSection
+                title={`Recomendações de Melhoria (${recommendations.length}) (Adm)`}
+                isOpen={!!openSections.recomendacoes}
+                onToggle={() => handleToggleSection('recomendacoes')}
+              >
+                <div className="space-y-4">
+                  {recommendations.map((rec, index) => (
+                    <div key={index} className="border-l-4 border-golden-yellow bg-golden-yellow bg-opacity-10 p-4 rounded-r-lg">
+                      <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0"><div className="w-6 h-6 bg-golden-yellow rounded-full flex items-center justify-center"><span className="text-xs font-bold text-charcoal">{index + 1}</span></div></div>
+                        <div className="flex-1">
+                          <h4 className="font-medium text-charcoal mb-1">{rec.section}</h4>
+                          <p className="text-sm text-gray-700 mb-2">{rec.question}</p>
+                          <div className="bg-white rounded p-3 border border-gray-200">
+                            <p className="text-sm text-gray-600 mb-2"><strong>Resposta atual:</strong> {rec.currentAnswer}</p>
+                            <p className="text-sm text-forest-green"><strong>Recomendação:</strong> {rec.recommendation}</p>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              </CollapsibleSection>
+            )}
+
+            {/* 4b. Respostas Detalhadas */}
+            <CollapsibleSection
+              title="Respostas Detalhadas (Adm)"
+              isOpen={!!openSections.respostas}
+              onToggle={() => handleToggleSection('respostas')}
+            >
+              <div className="space-y-6">
+                {evaluation.questionnaire.sections.map((section, sectionIndex) => (
+                  <div key={section.id} className="border border-gray-200 rounded-lg p-4">
+                    <h4 className="text-lg font-semibold text-charcoal mb-4 border-b border-gray-200 pb-2">{sectionIndex + 1}. {section.name}</h4>
+                    <div className="space-y-4">
+                      {section.questions?.map((question, questionIndex) => {
+                        const answer = evaluation.evaluation_answers.find(a => a.question_id === question.id);
+                        let answerText = 'Sem resposta';
+                        if (answer) {
+                          if (question.type === 'text') {
+                            answerText = answer.text_answer || 'Sem resposta';
+                          } else if (answer.selected_options) {
+                            const selectedOptions = question.options?.filter(opt => answer.selected_options?.includes(opt.id)) || [];
+                            answerText = selectedOptions.map(opt => opt.text).join(', ') || 'Sem resposta';
+                          }
+                        }
+                        return (
+                          <div key={question.id} className="bg-gray-50 rounded p-3">
+                            <div className="mb-2">
+                              <span className="text-sm font-medium text-gray-700">{sectionIndex + 1}.{questionIndex + 1}</span>
+                              <p className="text-sm text-charcoal mt-1">{question.text}</p>
+                            </div>
+                            <div className="border-l-3 border-blue-400 pl-3">
+                              <p className="text-sm text-gray-700"><strong>Resposta:</strong> {answerText}</p>
+                              {question.type !== 'text' && answer?.selected_options && (
+                                <div className="mt-2">
+                                  {question.options?.filter(opt => answer.selected_options?.includes(opt.id)).map(opt => (
+                                    <span key={opt.id} className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-2 mb-1">Score: {opt.score}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CollapsibleSection>
+          </>
         )}
+
       </div>
     </div>
   );

@@ -207,7 +207,18 @@ const Evaluation: React.FC = () => {
       let sectionMaxScore = 0;
 
       section.questions.forEach(question => {
-        sectionMaxScore += question.max_score;
+        let questionMaxScore = 0;
+        if (question.type === 'multiple_choice' && question.options) {
+          // Para escolha múltipla, o máximo é o maior score de todas as opções.
+          // O '0' garante que se todas as opções forem negativas, o máximo é 0.
+          questionMaxScore = Math.max(0, ...question.options.map(opt => opt.score));
+        } else if (question.type === 'checkbox' && question.options) {
+          // Para caixas de seleção, somamos APENAS as pontuações positivas.
+          questionMaxScore = question.options
+            .filter(opt => opt.score > 0)
+            .reduce((sum, opt) => sum + opt.score, 0);
+        }
+        sectionMaxScore += questionMaxScore;
         
         const answer = answers.find(a => a.questionId === question.id);
         if (answer && question.type !== 'text') {

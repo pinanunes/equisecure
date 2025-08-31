@@ -114,3 +114,9 @@ export interface Recommendation {
   section_name: string;
   full_name: string; // <-- Add this line
 }
+export interface Evaluation {
+  // ... todas as propriedades existentes
+  plan_status?: 'not_generated' | 'generating' | 'draft' | 'published';
+  plan_markdown?: string;
+  plan_actionable_measures?: { measure: string; category: string }[];
+}
