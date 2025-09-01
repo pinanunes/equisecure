@@ -22,7 +22,7 @@ const AssessmentManagement: React.FC = () => {
   const [exporting, setExporting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAssessment, setSelectedAssessment] = useState<AssessmentWithDetails | null>(null);
-
+  const [generatingPlanId, setGeneratingPlanId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'created_at', direction: 'descending' });
@@ -275,7 +275,29 @@ const handleOpenModal = async (assessment: AssessmentWithDetails) => {
         await supabase.from('evaluations').update({ plan_status: 'not_generated' }).eq('id', assessment.id);
     }
 };
+  const handleRegeneratePlan = async () => {
+      if (!selectedAssessment) {
+        alert("Nenhuma avaliação selecionada para regenerar.");
+        return;
+      }
 
+      // 1. Ativa o estado de loading ANTES de fazer qualquer outra coisa.
+      // Isto irá desativar o botão "Regenerar" e mostrar "A Regenerar..."
+      setGeneratingPlanId(selectedAssessment.id);
+      
+      // 2. Fechamos o modal para que o utilizador veja a tabela a atualizar na página principal.
+      handleCloseModal();
+      
+      // 3. Chamamos a lógica original de 'handleCreatePlan'.
+      // A função handleCreatePlan já trata de tudo o resto (chamar o webhook,
+      // mudar o estado na base de dados, etc.).
+      // O nosso poller useEffect irá automaticamente detetar a mudança de 'generating' para 'draft'.
+      await handleCreatePlan(selectedAssessment); 
+      
+      // 4. Limpamos o estado de loading depois de a operação ser iniciada.
+      // O poller assume a responsabilidade a partir daqui.
+      setGeneratingPlanId(null);
+    };
 const renderPlanButton = (assessment: AssessmentWithDetails) => {
     const status = assessment.plan_status;
 
@@ -711,6 +733,10 @@ if (loading && assessments.length === 0) {
           onPublish={handlePublishPlan}
           initialMarkdown={selectedAssessment?.plan_markdown || ''}
           status={selectedAssessment?.plan_status}
+          // --- ADICIONE ESTAS DUAS PROPS ---
+          onRegenerate={handleRegeneratePlan}
+          isGenerating={generatingPlanId === selectedAssessment?.id}
+          // --- FIM DAS ADIÇÕES ---
         />
       </div>
     </AdminLayout>
