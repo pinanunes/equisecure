@@ -164,9 +164,32 @@ const fetchAssessments = async (page = 0, search = '', status = 'all', sort = so
     }
   };
 
-  const handleOpenModal = (assessment: AssessmentWithDetails) => {
-    setSelectedAssessment(assessment);
-    setIsModalOpen(true);
+const handleOpenModal = async (assessment: AssessmentWithDetails) => {
+    // Para uma melhor UX, podemos mostrar um estado de loading no botão se for preciso,
+    // mas por agora vamos simplesmente ir buscar os dados.
+    try {
+      // 1. Ir buscar a versão completa e atualizada desta avaliação específica
+      const { data, error } = await supabase
+        .from('evaluations')
+        .select('plan_markdown, plan_status') // Só precisamos destes campos
+        .eq('id', assessment.id)
+        .single();
+
+      if (error) throw error;
+
+      // 2. Usamos os dados frescos da base de dados para definir o estado
+      setSelectedAssessment({
+        ...assessment, // Mantemos os dados que já tínhamos na lista
+        ...data,      // E sobrescrevemos com o plan_markdown e status atualizados
+      });
+
+      // 3. Só depois de termos os dados completos é que abrimos o modal
+      setIsModalOpen(true);
+
+    } catch (error) {
+      alert("Não foi possível carregar o conteúdo do plano. Tente novamente.");
+      console.error("Erro ao ir buscar o plano:", error);
+    }
   };
 
   const handleCloseModal = () => {
