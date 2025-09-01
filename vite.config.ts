@@ -22,6 +22,8 @@ export default defineConfig({
         scope: '/',
         start_url: '/',
         icons: [
+          // Estes ícones (com fundo) serão usados para o ecrã principal.
+          // Certifique-se que pwa-192x192.png e pwa-512x512.png estão na sua pasta 'public'.
           {
             src: 'pwa-192x192.png',
             sizes: '192x192',
@@ -40,6 +42,13 @@ export default defineConfig({
           }
         ]
       },
+      // --- A ÚNICA ALTERAÇÃO É ADICIONAR ESTA SECÇÃO ---
+      pwaAssets: {
+        // Esta imagem (sem fundo) será usada para gerar a splash screen.
+        // Certifique-se que o ficheiro 'logo-transparent.png' está na sua pasta 'public'.
+        image: 'logo-transparent.png', 
+      },
+      // --- FIM DA ALTERAÇÃO ---
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [

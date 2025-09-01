@@ -21,44 +21,20 @@ const InstallationManagement: React.FC = () => {
 
   const fetchInstallations = async () => {
     try {
-      // Fetch all installations
-      const { data: installationsData, error: installationsError } = await supabase
-        .from('installations')
+      // Fazemos uma única query à nossa nova view otimizada
+      const { data, error } = await supabase
+        .from('installations_with_stats') // <-- A ÚNICA MUDANÇA É AQUI
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (installationsError) {
-        console.error('Error fetching installations:', installationsError);
-        return;
+      if (error) {
+        console.error('Error fetching installations:', error);
+        throw error;
       }
 
-      // Fetch evaluations for each installation
-      const installationsWithEvaluations: InstallationWithLastEvaluation[] = [];
+      // Os dados já vêm formatados, só precisamos de os definir no estado
+      setInstallations(data || []);
 
-      for (const installation of installationsData || []) {
-        const { data: evaluations, error: evaluationsError } = await supabase
-          .from('evaluations')
-          .select('created_at, total_score')
-          .eq('installation_id', installation.id)
-          .order('created_at', { ascending: false });
-
-        if (evaluationsError) {
-          console.error('Error fetching evaluations for installation:', installation.id, evaluationsError);
-          continue;
-        }
-
-        const latestEvaluation = evaluations?.[0];
-        
-        installationsWithEvaluations.push({
-          ...installation,
-          lastEvaluationDate: latestEvaluation?.created_at,
-          lastEvaluationScore: latestEvaluation?.total_score,
-          evaluationCount: evaluations?.length || 0,
-          active: installation.active ?? true, // Default to true if column doesn't exist yet
-        });
-      }
-
-      setInstallations(installationsWithEvaluations);
     } catch (error) {
       console.error('Error in fetchInstallations:', error);
     } finally {
@@ -66,6 +42,7 @@ const InstallationManagement: React.FC = () => {
     }
   };
 
+      
   const toggleInstallationStatus = async (installationId: string, currentStatus: boolean) => {
     try {
       const { error } = await supabase
@@ -222,7 +199,7 @@ const InstallationManagement: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {installation.user_id}
+                          {(installation as any).user_email || 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {formatDate(installation.lastEvaluationDate)}

@@ -14,16 +14,18 @@ const UserManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
+      // Chamamos a nossa nova função da base de dados com 'rpc'
       const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
+        .rpc('get_users_with_stats')
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching users:', error);
-      } else {
-        setUsers(data || []);
+        console.error('Error fetching users with stats:', error);
+        throw error;
       }
+      
+      setUsers(data || []);
+
     } catch (error) {
       console.error('Error in fetchUsers:', error);
     } finally {
@@ -111,6 +113,12 @@ const UserManagement: React.FC = () => {
                       Utilizador
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Explorações
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Avaliações
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Papel
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -142,6 +150,12 @@ const UserManagement: React.FC = () => {
                             </div>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">
+                        {user.installation_count}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">
+                        {user.evaluation_count}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${

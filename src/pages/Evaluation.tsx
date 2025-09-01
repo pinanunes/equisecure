@@ -241,12 +241,12 @@ const Evaluation: React.FC = () => {
           }
         }
       });
-
+      const finalSectionCurrentScore = Math.max(0, sectionCurrentScore);
       return {
         sectionId: section.id,
         currentScore: sectionCurrentScore,
         maxScore: sectionMaxScore,
-        percentage: sectionMaxScore > 0 ? (sectionCurrentScore / sectionMaxScore) * 100 : 0
+        percentage: sectionMaxScore > 0 ? (finalSectionCurrentScore / sectionMaxScore) * 100 : 0
       };
     });
 

@@ -11,6 +11,11 @@ interface AssessmentWithDetails extends Evaluation {
   section_scores?: Array<{ section_id: string; score: number }>;
 }
 
+type SortConfig = {
+  key: string;
+  direction: 'ascending' | 'descending';
+};
+
 const AssessmentManagement: React.FC = () => {
   const [assessments, setAssessments] = useState<AssessmentWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,102 +23,144 @@ const AssessmentManagement: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAssessment, setSelectedAssessment] = useState<AssessmentWithDetails | null>(null);
 
-  useEffect(() => {
-    fetchAssessments();
-  }, []);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'created_at', direction: 'descending' });
+  const [totalCount, setTotalCount] = useState(0);
+  const ASSESSMENTS_PER_PAGE = 10;
 
+  // ESTADOS SEPARADOS PARA A PESQUISA E O SEU "DEBOUNCE"
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  // --- O ÚNICO E CORRIGIDO useEffect PARA BUSCA DE DADOS ---
+    // useEffect #1: APENAS para o debounce da pesquisa.
   useEffect(() => {
-    // Encontra o PRIMEIRO assessment que está no estado 'generating'.
-    // Isto evita que o poller se confunda se houver múltiplos.
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      // Quando a pesquisa muda, voltamos à primeira página.
+      setCurrentPage(0); 
+    }, 500); // 500ms de atraso
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [searchTerm]); // Só reage quando o utilizador digita.
+
+  // useEffect #2: O ÚNICO useEffect que vai buscar os dados.
+  useEffect(() => {
+    fetchAssessments(currentPage, debouncedSearchTerm, statusFilter, sortConfig);
+  }, [currentPage, debouncedSearchTerm, statusFilter, sortConfig]); // Reage a tudo o que deve acionar uma nova busca.
+
+  // useEffect #3: O seu polling (permanece igual)
+  useEffect(() => {
     const assessmentToPoll = assessments.find(a => a.plan_status === 'generating');
-     if (!assessmentToPoll) return;
-    // Se não houver nenhum assessment a gerar, não fazemos nada e garantimos que o intervalo é limpo.
-    if (!assessmentToPoll) {
-        return;
-    }
-
-    console.log(`POLLER ATIVADO para o assessment ID: ${assessmentToPoll.id}`);
-
+    if (!assessmentToPoll) return;
     const intervalId = setInterval(async () => {
-        try {
-            const { data, error } = await supabase
-                .from('evaluations')
-                .select('plan_status, plan_markdown, plan_actionable_measures')
-                .eq('id', assessmentToPoll.id)
-                .single();
-
-            if (error) throw error;
-
-            if (data && data.plan_status !== 'generating') {
-                console.log(`Polling bem-sucedido para ${assessmentToPoll.id}! Novo estado: ${data.plan_status}`);
-                clearInterval(intervalId);
-
-                // Em vez de chamar fetchAssessments() de novo,
-                // simplesmente atualizamos o assessment específico que mudou.
-                // Isto é mais eficiente e evita re-renders desnecessários.
-                setAssessments(currentAssessments =>
-                    currentAssessments.map(a =>
-                        a.id === assessmentToPoll.id
-                            ? { ...a, ...data } // Faz o merge dos novos dados
-                            : a
-                    )
-                );
-            } else {
-                console.log(`Ainda a gerar para ${assessmentToPoll.id}...`);
-            }
-        } catch (error) {
-            console.error('Erro durante o polling:', error);
-            clearInterval(intervalId);
+      try {
+        const { data, error } = await supabase.from('evaluations').select('plan_status, plan_markdown, plan_actionable_measures').eq('id', assessmentToPoll.id).single();
+        if (error) throw error;
+        if (data && data.plan_status !== 'generating') {
+          clearInterval(intervalId);
+          setAssessments(currentAssessments => currentAssessments.map(a => a.id === assessmentToPoll.id ? { ...a, ...data } : a));
         }
-    }, 5000); // 5 segundos
-
+      } catch (error) {
+        console.error('Erro durante o polling:', error);
+        clearInterval(intervalId);
+      }
+    }, 5000);
     return () => clearInterval(intervalId);
+  }, [assessments]);
 
-}, [assessments]); // O poller reavalia sempre que a lista de assessments muda.
+  // useEffect para o polling em tempo real (sem alterações)
+  useEffect(() => {
+    const assessmentToPoll = assessments.find(a => a.plan_status === 'generating');
+    if (!assessmentToPoll) return;
+    const intervalId = setInterval(async () => {
+      try {
+        const { data, error } = await supabase.from('evaluations').select('plan_status, plan_markdown, plan_actionable_measures').eq('id', assessmentToPoll.id).single();
+        if (error) throw error;
+        if (data && data.plan_status !== 'generating') {
+          clearInterval(intervalId);
+          setAssessments(currentAssessments => currentAssessments.map(a => a.id === assessmentToPoll.id ? { ...a, ...data } : a));
+        }
+      } catch (error) {
+        console.error('Erro durante o polling:', error);
+        clearInterval(intervalId);
+      }
+    }, 5000);
+    return () => clearInterval(intervalId);
+  }, [assessments]);
 
-  const fetchAssessments = async () => {
+  // FUNÇÃO fetchAssessments AGORA TOTALMENTE DINÂMICA
+const fetchAssessments = async (page = 0, search = '', status = 'all', sort = sortConfig) => {
+    setLoading(true);
     try {
-      // First, fetch evaluations with installations
-      const { data: evaluationsData, error: evaluationsError } = await supabase
+      const from = page * ASSESSMENTS_PER_PAGE;
+      // A variável 'to' é calculada aqui...
+      const to = from + ASSESSMENTS_PER_PAGE - 1;
+
+      let query = supabase
         .from('evaluations')
         .select(`
-          *,
-          installation:installations(*)
-        `)
-        .order('created_at', { ascending: false });
+            id, created_at, total_score, plan_status,
+            installation:installations!inner(name, region, type),
+            profile:profiles!inner(email)
+        `, { count: 'exact' });
 
-      if (evaluationsError) {
-        console.error('Error fetching assessments:', evaluationsError);
-        return;
-      }
-
-      // Then, fetch user emails for each evaluation
-      const assessmentsWithDetails: AssessmentWithDetails[] = [];
-
-      for (const evaluation of evaluationsData || []) {
-        // Fetch user profile for this evaluation
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('id', evaluation.user_id)
-          .single();
-
-        if (profileError) {
-          console.error('Error fetching user profile for evaluation:', evaluation.id, profileError);
-        }
-
-        assessmentsWithDetails.push({
-          ...evaluation,
-          installation: evaluation.installation,
-          user_email: profileData?.email || 'Email não encontrado'
+      if (search) {
+        query = query.or(`installation.name.ilike.%${search}%,profile.email.ilike.%${search}%`, {
+          foreignTable: 'installation,profile'
         });
       }
 
+      if (status !== 'all') {
+        query = query.eq('plan_status', status);
+      }
+
+      const isForeignSort = sort.key.includes('.');
+      const sortKey = isForeignSort ? sort.key.split('.')[1] : sort.key;
+      const foreignTable = isForeignSort ? sort.key.split('.')[0] : undefined;
+
+      query = query.order(sortKey, {
+        ascending: sort.direction === 'ascending',
+        foreignTable: foreignTable,
+      });
+      
+      // ...E é usada aqui, na chamada .range(from, to). Esta é a correção.
+      const { data, error, count } = await query.range(from, to);
+      
+      if (error) throw error;
+      
+      const assessmentsWithDetails = data.map((evaluation: any) => ({
+        ...evaluation,
+        installation: evaluation.installation,
+        user_email: evaluation.profile?.email || 'Email não encontrado'
+      }));
+
       setAssessments(assessmentsWithDetails);
+      setTotalCount(count || 0);
     } catch (error) {
       console.error('Error in fetchAssessments:', error);
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // FUNÇÃO para gerir os cliques nos cabeçalhos da tabela
+   const handleSort = (key: string) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    // Se estamos a clicar na mesma coluna que já está ativa...
+    if (sortConfig.key === key) {
+      // ...simplesmente invertemos a direção atual.
+      direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+    }
+    // Se for uma coluna nova, a direção por defeito (definida acima) é 'ascending'.
+    
+    setSortConfig({ key, direction });
+    // O useEffect principal tratará de reiniciar a página, mas podemos ser explícitos se quisermos
+    if (currentPage !== 0) {
+        setCurrentPage(0);
     }
   };
 
@@ -446,7 +493,84 @@ const renderPlanButton = (assessment: AssessmentWithDetails) => {
     }
   };
 
-  if (loading) {
+
+  const exportFeedback = async () => {
+    setExporting(true);
+    try {
+      // 1. Ir buscar todos os dados de feedback com a informação relacionada
+      const { data: feedbackData, error } = await supabase
+        .from('feedback_measures')
+        .select(`
+          measure_text,
+          category,
+          user_feedback,
+          user_comment,
+          evaluation:evaluations(
+            installation:installations(name),
+            profile:profiles(email)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching feedback data:', error);
+        throw error;
+      }
+
+      // 2. Preparar os cabeçalhos do CSV
+      const csvHeaders = [
+        'Nome da Exploração',
+        'Email do Utilizador',
+        'Medida Recomendada',
+        'Categoria da Medida',
+        'Feedback do Utilizador',
+        'Comentário'
+      ];
+
+      // 3. Mapear os dados para as linhas do CSV
+      const csvRows = feedbackData.map((feedback: any) => {
+        // Usamos optional chaining (?) para evitar erros se alguma relação for nula
+        const installationName = feedback.evaluation?.installation?.name || 'N/A';
+        const userEmail = feedback.evaluation?.profile?.email || 'N/A';
+        
+        // Limpamos o texto para garantir que não quebra o CSV (removemos ponto e vírgula e quebras de linha)
+        const cleanMeasureText = `"${(feedback.measure_text || '').replace(/"/g, '""').replace(/(\r\n|\n|\r)/gm, ' ')}"`;
+        const cleanComment = `"${(feedback.user_comment || '').replace(/"/g, '""').replace(/(\r\n|\n|\r)/gm, ' ')}"`;
+
+        return [
+          installationName,
+          userEmail,
+          cleanMeasureText,
+          feedback.category || '',
+          feedback.user_feedback || '',
+          cleanComment
+        ].join(';');
+      });
+
+      // 4. Criar e descarregar o ficheiro CSV
+      const csvContent = [
+        csvHeaders.join(';'),
+        ...csvRows
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `feedback_avaliacoes_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+    } catch (error) {
+      alert('Erro ao exportar o feedback.');
+      console.error('Error exporting feedback:', error);
+    } finally {
+      setExporting(false);
+    }
+  };
+if (loading && assessments.length === 0) {
     return (
       <AdminLayout>
         <div className="flex items-center justify-center h-64">
@@ -456,60 +580,66 @@ const renderPlanButton = (assessment: AssessmentWithDetails) => {
     );
   }
 
+  // A sua secção RETURN, agora com a lógica e os handlers corretos para suportá-la
   return (
     <AdminLayout>
       <div>
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-charcoal">Gestão de Avaliações</h1>
-          
-          {/* Export buttons */}
           <div className="flex space-x-3">
-            <button
-              onClick={exportScores}
-              disabled={exporting || assessments.length === 0}
-              className="bg-sage-green text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-sage-green-dark disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button onClick={exportScores} disabled={exporting || assessments.length === 0} className="bg-sage-green text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-sage-green-dark disabled:opacity-50 disabled:cursor-not-allowed">
               {exporting ? 'A exportar...' : 'Exportar Scores'}
             </button>
-            <button
-              onClick={exportFullData}
-              disabled={exporting || assessments.length === 0}
-              className="bg-golden-yellow text-charcoal px-4 py-2 rounded-md text-sm font-medium hover:bg-golden-yellow-dark disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button onClick={exportFullData} disabled={exporting || assessments.length === 0} className="bg-golden-yellow text-charcoal px-4 py-2 rounded-md text-sm font-medium hover:bg-golden-yellow-dark disabled:opacity-50 disabled:cursor-not-allowed">
               {exporting ? 'A exportar...' : 'Exportar Dados Completos'}
+            </button>
+            <button
+              onClick={exportFeedback}
+              disabled={exporting}
+              className="bg-forest-green text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-forest-green-dark disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {exporting ? 'A exportar...' : 'Exportar Feedback'}
             </button>
           </div>
         </div>
 
-        {/* Assessments Table */}
+        <div className="mb-6 p-4 bg-white rounded-lg shadow">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input
+              type="text"
+              placeholder="Pesquisar por exploração ou email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-forest-green"
+            />
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(0); }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-forest-green"
+            >
+              <option value="all">Todos os Estados</option>
+              <option value="not_generated">Não Gerado</option>
+              <option value="generating">A Gerar</option>
+              <option value="draft">Rascunho</option>
+              <option value="published">Publicado</option>
+            </select>
+          </div>
+        </div>
+
         <div className="bg-white shadow overflow-hidden sm:rounded-md">
-          {assessments.length === 0 ? (
-            <div className="px-4 py-5 sm:px-6 text-center">
-              <p className="text-gray-500">Nenhuma avaliação encontrada.</p>
-            </div>
+          {assessments.length === 0 && !loading ? (
+            <div className="px-4 py-5 sm:px-6 text-center"><p className="text-gray-500">Nenhuma avaliação encontrada para os critérios de pesquisa.</p></div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Exploração
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Utilizador
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Data
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Score
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Plano de Ação
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ações
-                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('installation.name')}>Exploração {sortConfig.key === 'installation.name' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('profile.email')}>Utilizador {sortConfig.key === 'profile.email' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('created_at')}>Data {sortConfig.key === 'created_at' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('total_score')}>Score {sortConfig.key === 'total_score' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('plan_status')}>Plano de Ação {sortConfig.key === 'plan_status' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -517,45 +647,12 @@ const renderPlanButton = (assessment: AssessmentWithDetails) => {
                     const risk = getRiskLevel(assessment.total_score);
                     return (
                       <tr key={assessment.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-charcoal">
-                              {assessment.installation.name}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {assessment.installation.region && `${assessment.installation.region} • `}
-                              {assessment.installation.type}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {assessment.user_email}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDate(assessment.created_at)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <span className={`text-sm font-medium ${risk.color}`}>
-                              {(assessment.total_score * 100).toFixed(1)}%
-                            </span>
-                            <span className={`ml-2 text-xs ${risk.color}`}>
-                              ({risk.level})
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          {renderPlanButton(assessment)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <Link
-                            to={`/evaluation-report/${assessment.id}`}
-                            state={{ from: '/admin/assessments' }}
-                            className="text-forest-green hover:text-forest-green-dark mr-4"
-                          >
-                            Ver Relatório
-                          </Link>
-                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap"><div><div className="text-sm font-medium text-charcoal">{assessment.installation.name}</div><div className="text-sm text-gray-500">{assessment.installation.region && `${assessment.installation.region} • `}{assessment.installation.type}</div></div></td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{assessment.user_email}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(assessment.created_at)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap"><div className="flex items-center"><span className={`text-sm font-medium ${risk.color}`}>{(assessment.total_score * 100).toFixed(1)}%</span><span className={`ml-2 text-xs ${risk.color}`}>({risk.level})</span></div></td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">{renderPlanButton(assessment)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium"><Link to={`/evaluation-report/${assessment.id}`} state={{ from: '/admin/assessments' }} className="text-forest-green hover:text-forest-green-dark">Ver Relatório</Link></td>
                       </tr>
                     );
                   })}
@@ -565,43 +662,33 @@ const renderPlanButton = (assessment: AssessmentWithDetails) => {
           )}
         </div>
 
-        {/* Summary */}
+        <div className="mt-4 flex justify-end items-center space-x-4">
+            <span className="text-sm text-gray-700">Mostrando {assessments.length} de {totalCount}</span>
+            <span className="text-sm text-gray-700">Página {currentPage + 1} de {Math.max(1, Math.ceil(totalCount / ASSESSMENTS_PER_PAGE))}</span>
+            <button onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))} disabled={currentPage === 0 || loading} className="bg-gray-200 text-gray-800 px-3 py-1 rounded-md text-sm hover:bg-gray-300 disabled:opacity-50">Anterior</button>
+            <button onClick={() => setCurrentPage(prev => prev + 1)} disabled={(currentPage + 1) * ASSESSMENTS_PER_PAGE >= totalCount || loading} className="bg-gray-200 text-gray-800 px-3 py-1 rounded-md text-sm hover:bg-gray-300 disabled:opacity-50">Próxima</button>
+        </div>
+
+        {/* Resumo */}
         <div className="mt-6 bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-medium text-charcoal mb-4">Resumo</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-charcoal">{assessments.length}</div>
-              <div className="text-sm text-gray-600">Total de Avaliações</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">
-                {assessments.filter(a => a.total_score <= 0.3).length}
-              </div>
-              <div className="text-sm text-gray-600">Risco Baixo</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600">
-                {assessments.filter(a => a.total_score > 0.3 && a.total_score <= 0.6).length}
-              </div>
-              <div className="text-sm text-gray-600">Risco Médio</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-red-600">
-                {assessments.filter(a => a.total_score > 0.6).length}
-              </div>
-              <div className="text-sm text-gray-600">Risco Alto</div>
-            </div>
+            <div className="text-center"><div className="text-2xl font-bold text-charcoal">{totalCount}</div><div className="text-sm text-gray-600">Total de Avaliações</div></div>
+            <div className="text-center"><div className="text-2xl font-bold text-green-600">{assessments.filter(a => a.total_score <= 0.3).length}</div><div className="text-sm text-gray-600">Risco Baixo</div></div>
+            <div className="text-center"><div className="text-2xl font-bold text-yellow-600">{assessments.filter(a => a.total_score > 0.3 && a.total_score <= 0.6).length}</div><div className="text-sm text-gray-600">Risco Médio</div></div>
+            <div className="text-center"><div className="text-2xl font-bold text-red-600">{assessments.filter(a => a.total_score > 0.6).length}</div><div className="text-sm text-gray-600">Risco Alto</div></div>
           </div>
         </div>
-       {/* 5. Renderizar o Modal no final */}
-      <PlanEditorModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onSave={handleSaveChanges}
-        onPublish={handlePublishPlan}
-        initialMarkdown={selectedAssessment?.plan_markdown || ''}
-        status={selectedAssessment?.plan_status}
-      />
+        
+        {/* Modal de Edição do Plano */}
+        <PlanEditorModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          onSave={handleSaveChanges}
+          onPublish={handlePublishPlan}
+          initialMarkdown={selectedAssessment?.plan_markdown || ''}
+          status={selectedAssessment?.plan_status}
+        />
       </div>
     </AdminLayout>
   );

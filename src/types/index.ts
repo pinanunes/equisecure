@@ -14,6 +14,8 @@ export interface Profile {
   has_given_consent?: boolean;
   created_at: string;
   updated_at: string;
+  installation_count?: number;
+  evaluation_count?: number;
 }
 
 export interface Exploracao {
