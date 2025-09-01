@@ -255,8 +255,8 @@ const EvaluationReport: React.FC = () => {
         >
           <div className="space-y-4">
             {evaluation.questionnaire.sections.map(section => {
-              const sectionScore = sectionScores.find(s => s.section_id === section.id);
-              const score = sectionScore?.score || 0;
+              const sectionScoreData = sectionScores.find(s => s.section_id === section.id);
+              const score = Math.max(0, sectionScoreData?.score || 0);
               const risk = getRiskLevel(score);
               return (
                 <div key={section.id} className="border border-gray-200 rounded-lg p-4">

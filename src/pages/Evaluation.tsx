@@ -244,7 +244,7 @@ const Evaluation: React.FC = () => {
       const finalSectionCurrentScore = Math.max(0, sectionCurrentScore);
       return {
         sectionId: section.id,
-        currentScore: sectionCurrentScore,
+        currentScore: finalSectionCurrentScore,
         maxScore: sectionMaxScore,
         percentage: sectionMaxScore > 0 ? (finalSectionCurrentScore / sectionMaxScore) * 100 : 0
       };
@@ -253,15 +253,15 @@ const Evaluation: React.FC = () => {
     setSectionScores(updatedSectionScores);
 
     // Calculate total score
-    const totalCurrent = updatedSectionScores.reduce((sum, s) => sum + s.currentScore, 0);
-    const totalMax = updatedSectionScores.reduce((sum, s) => sum + s.maxScore, 0);
-    
-    setTotalScore({
-      current: totalCurrent,
-      max: totalMax,
-      percentage: totalMax > 0 ? (totalCurrent / totalMax) * 100 : 0
-    });
-  };
+      const totalCurrent = updatedSectionScores.reduce((sum, s) => sum + s.currentScore, 0);
+      const totalMax = updatedSectionScores.reduce((sum, s) => sum + s.maxScore, 0);
+  
+      setTotalScore({
+        current: totalCurrent,
+        max: totalMax,
+        percentage: totalMax > 0 ? (totalCurrent / totalMax) * 100 : 0
+      });
+};
 
   const handleAnswerChange = (questionId: string, selectedOptions: string[], textAnswer?: string) => {
     setAnswers(prev => {
@@ -328,8 +328,11 @@ const Evaluation: React.FC = () => {
 
     try {
       // Calculate final scores
+      const finalSectionScores = sectionScores.map(s => ({
+        section_id: s.sectionId,
+        score: s.maxScore > 0 ? s.currentScore / s.maxScore : 0
+      }));
       const finalTotalScore = totalScore.max > 0 ? totalScore.current / totalScore.max : 0;
-      
       // Create the evaluation record
       const { data: evaluation, error: evaluationError } = await supabase
         .from('evaluations')
@@ -338,13 +341,12 @@ const Evaluation: React.FC = () => {
           installation_id: exploracaoId,
           questionnaire_id: questionnaire.id,
           total_score: finalTotalScore,
-          section_scores: sectionScores.map(s => ({
-            section_id: s.sectionId,
-            score: s.maxScore > 0 ? s.currentScore / s.maxScore : 0
-          }))
+          section_scores: finalSectionScores // Guardamos os scores corrigidos
         })
         .select()
         .single();
+
+      
 
       if (evaluationError) {
         console.error('Error creating evaluation:', evaluationError);
