@@ -45,6 +45,7 @@ const Evaluation: React.FC = () => {
   const [showExploracaoForm, setShowExploracaoForm] = useState(false);
   const [exploracaoForm, setExploracaoForm] = useState({
     name: '',
+    contact_name: '',
     region: '',
     type: ''
   });
@@ -294,12 +295,13 @@ const Evaluation: React.FC = () => {
       return;
     }
 
-    try {
+     try {
       const { data: newExploracao, error } = await supabase
         .from('installations')
         .insert({
           user_id: user?.id,
           name: exploracaoForm.name.trim(),
+          contact_name: exploracaoForm.contact_name.trim() || null, // <-- Adicionado
           region: exploracaoForm.region.trim() || null,
           type: exploracaoForm.type.trim() || null
         })
@@ -499,6 +501,29 @@ const Evaluation: React.FC = () => {
   const currentSectionScore = sectionScores.find(s => s.sectionId === currentSection?.id);
 
   // Show exploração form if needed
+  const regioesPorGrupo = [
+    {
+      label: 'Continente - Norte',
+      regioes: ['Alto Minho', 'Alto Tâmega', 'Área Metropolitana do Porto', 'Ave', 'Cávado', 'Douro', 'Tâmega e Sousa', 'Terras de Trás-os-Montes'],
+    },
+    {
+      label: 'Continente - Centro',
+      regioes: ['Beira Baixa', 'Beiras e Serra da Estrela', 'Médio Tejo', 'Oeste', 'Região de Aveiro', 'Região de Coimbra', 'Região de Leiria', 'Viseu Dão Lafões'],
+    },
+    {
+      label: 'Continente - Lisboa e Vale do Tejo',
+      regioes: ['Área Metropolitana de Lisboa', 'Lezíria do Tejo'],
+    },
+    {
+      label: 'Continente - Sul',
+      regioes: ['Alentejo Central', 'Alentejo Litoral', 'Alto Alentejo', 'Baixo Alentejo', 'Algarve'],
+    },
+    {
+      label: 'Regiões Autónomas',
+      regioes: ['Açores', 'Madeira'],
+    }
+  ];
+  
   if (showExploracaoForm) {
     return (
       <div className="min-h-screen bg-cream">
@@ -506,7 +531,7 @@ const Evaluation: React.FC = () => {
           <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-6">
             <h1 className="text-2xl font-bold text-charcoal mb-6">Nova Exploração</h1>
             <p className="text-gray-600 mb-6">
-              Para começar a avaliação, primeiro precisa de criar uma nova exploração.
+              Para começar a avaliação, primeiro precisa de identificar a exploração.
             </p>
             
             <div className="space-y-4">
@@ -518,24 +543,46 @@ const Evaluation: React.FC = () => {
                   type="text"
                   value={exploracaoForm.name}
                   onChange={(e) => setExploracaoForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-forest-green focus:border-forest-green"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-forest-green"
                   placeholder="Ex: Quinta do Vale Verde"
                   required
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-charcoal mb-2">
+                  Nome do Contacto
+                </label>
+                <input
+                  type="text"
+                  value={exploracaoForm.contact_name}
+                  onChange={(e) => setExploracaoForm(prev => ({ ...prev, contact_name: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-forest-green"
+                  placeholder="Ex: Telmo Nunes"
+                />
+              </div>
               
+              {/* --- DROPDOWN "REGIÃO" ATUALIZADO COM GRUPOS --- */}
               <div>
                 <label className="block text-sm font-medium text-charcoal mb-2">
                   Região
                 </label>
-                <input
-                  type="text"
+                <select
                   value={exploracaoForm.region}
                   onChange={(e) => setExploracaoForm(prev => ({ ...prev, region: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-forest-green focus:border-forest-green"
-                  placeholder="Ex: Lisboa, Porto, Alentejo..."
-                />
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-forest-green"
+                >
+                  <option value="">Selecione a região</option>
+                  {regioesPorGrupo.map(grupo => (
+                    <optgroup key={grupo.label} label={grupo.label}>
+                      {grupo.regioes.map(regiao => (
+                        <option key={regiao} value={regiao}>{regiao}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
               </div>
+              {/* --- FIM DA ATUALIZAÇÃO --- */}
               
               <div>
                 <label className="block text-sm font-medium text-charcoal mb-2">
@@ -547,27 +594,23 @@ const Evaluation: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-forest-green focus:border-forest-green"
                 >
                   <option value="">Selecione o tipo</option>
+                  <option value="Centro equestre sem escola de equitação">Centro equestre sem escola de equitação</option>
+                  <option value="Centro equestre com escola de equitação">Centro equestre com escola de equitação</option>
                   <option value="Coudelaria">Coudelaria</option>
-                  <option value="Centro de Treinos">Centro de Treinos</option>
-                  <option value="Centro Hípico">Centro Hípico</option>
-                  <option value="Quinta de Lazer">Quinta de Lazer</option>
-                  <option value="Exploração Agrícola">Exploração Agrícola</option>
+                  <option value="Centro de reprodução">Centro de reprodução</option>
+                  <option value="Hospital veterinário">Hospital veterinário</option>
+                  <option value="Quinta pedagógica">Quinta pedagógica</option>
+                  <option value="Detenção própria">Detenção própria</option>
                   <option value="Outro">Outro</option>
                 </select>
               </div>
             </div>
             
-            <div className="flex space-x-4 mt-6">
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="flex-1 bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
-              >
+             <div className="flex space-x-4 mt-6">
+              <button onClick={() => navigate('/dashboard')} className="flex-1 bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600">
                 Cancelar
               </button>
-              <button
-                onClick={handleCreateExploracao}
-                className="flex-1 bg-forest-green text-white px-4 py-2 rounded-md hover:bg-forest-green-dark"
-              >
+              <button onClick={handleCreateExploracao} className="flex-1 bg-forest-green text-white px-4 py-2 rounded-md hover:bg-forest-green-dark">
                 Criar e Continuar
               </button>
             </div>
