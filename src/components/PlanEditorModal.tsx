@@ -8,7 +8,7 @@ interface PlanEditorModalProps {
   onPublish: (markdown: string) => void;
   initialMarkdown: string;
   status?: 'not_generated' | 'generating' | 'draft' | 'published';
-  onRegenerate: () => void;
+  onRegenerate: (model: string) => void;
   isGenerating?: boolean;
 }
 
@@ -23,7 +23,7 @@ const PlanEditorModal: React.FC<PlanEditorModalProps> = ({
   isGenerating
 }) => {
   const [markdownContent, setMarkdownContent] = useState(initialMarkdown);
-
+  const [selectedModel, setSelectedModel] = useState('pro');
   useEffect(() => {
     setMarkdownContent(initialMarkdown);
   }, [initialMarkdown]);
@@ -60,16 +60,27 @@ const PlanEditorModal: React.FC<PlanEditorModalProps> = ({
         <div className="flex justify-between items-center p-4 border-t">
           <div>
             {isDraft && (
-              <button
-                onClick={onRegenerate}
-                disabled={isGenerating}
-                className="px-4 py-2 rounded-md bg-warm-brown text-white hover:bg-warm-brown-dark text-sm disabled:opacity-50"
-              >
-                {isGenerating ? 'A Regenerar...' : 'Regenerar Plano (AI)'}
-              </button>
+              <div className="flex items-center space-x-2">
+                {/* O nosso novo seletor de modelo */}
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  disabled={isGenerating}
+                  className="px-2 py-2 border border-gray-300 rounded-md text-sm focus:ring-forest-green focus:border-forest-green"
+                >
+                  <option value="pro">Gemini Pro (Qualidade)</option>
+                  <option value="flash">Gemini Flash (Rápido)</option>
+                </select>
+                <button
+                  onClick={() => onRegenerate(selectedModel)} // Passamos o modelo selecionado
+                  disabled={isGenerating}
+                  className="px-4 py-2 rounded-md bg-warm-brown text-white hover:bg-warm-brown-dark text-sm disabled:opacity-50"
+                >
+                  {isGenerating ? 'A Regenerar...' : 'Regenerar'}
+                </button>
+              </div>
             )}
           </div>
-
           <div className="flex items-center space-x-4">
             {isPublished && (
               <span className="text-sm font-medium text-green-600">Este plano já foi publicado.</span>

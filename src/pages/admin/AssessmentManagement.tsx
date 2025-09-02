@@ -73,23 +73,65 @@ const AssessmentManagement: React.FC = () => {
   }, [assessments]);
 
   // useEffect para o polling em tempo real (sem alterações)
+
+
   useEffect(() => {
     const assessmentToPoll = assessments.find(a => a.plan_status === 'generating');
     if (!assessmentToPoll) return;
-    const intervalId = setInterval(async () => {
+
+    let intervalId: NodeJS.Timeout | undefined = undefined;
+
+    const safetyTimeout = setTimeout(() => {
+      console.error(`Polling para ${assessmentToPoll.id} atingiu o timeout. A reverter o estado.`);
+      if (intervalId) clearInterval(intervalId);
+      setAssessments(prev => prev.map(a => 
+        a.id === assessmentToPoll.id ? { ...a, plan_status: 'not_generated' } : a
+      ));
+    }, 300000); // 5 minutos
+
+    intervalId = setInterval(async () => {
       try {
-        const { data, error } = await supabase.from('evaluations').select('plan_status, plan_markdown, plan_actionable_measures').eq('id', assessmentToPoll.id).single();
-        if (error) throw error;
+        const { data, error } = await supabase
+          .from('evaluations')
+          .select('plan_status, plan_markdown, plan_actionable_measures')
+          .eq('id', assessmentToPoll.id)
+          .single();
+
+        if (error) {
+            console.error('Erro na query do polling:', error);
+            if (intervalId) clearInterval(intervalId);
+            clearTimeout(safetyTimeout);
+            return;
+        }
+
         if (data && data.plan_status !== 'generating') {
-          clearInterval(intervalId);
-          setAssessments(currentAssessments => currentAssessments.map(a => a.id === assessmentToPoll.id ? { ...a, ...data } : a));
+          console.log(`Polling bem-sucedido para ${assessmentToPoll.id}! Novo estado: ${data.plan_status}`);
+          
+          if (intervalId) clearInterval(intervalId);
+          clearTimeout(safetyTimeout);
+          
+          // --- A CORREÇÃO ESTÁ AQUI ---
+          setAssessments(currentAssessments =>
+            currentAssessments.map(a =>
+              a.id === assessmentToPoll.id
+                ? { ...a, ...data }
+                : a // <-- O sinal de menos foi substituído por dois pontos (:)
+            )
+          );
+        } else {
+            console.log(`Ainda a gerar para ${assessmentToPoll.id}...`);
         }
       } catch (error) {
-        console.error('Erro durante o polling:', error);
-        clearInterval(intervalId);
+        console.error('Erro geral durante o polling:', error);
+        if (intervalId) clearInterval(intervalId);
+        clearTimeout(safetyTimeout);
       }
     }, 5000);
-    return () => clearInterval(intervalId);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      clearTimeout(safetyTimeout);
+    };
   }, [assessments]);
 
   // FUNÇÃO fetchAssessments AGORA TOTALMENTE DINÂMICA
@@ -242,7 +284,7 @@ const handleOpenModal = async (assessment: AssessmentWithDetails) => {
       console.error(error);
     }
   };
-  const handleCreatePlan = async (assessment: AssessmentWithDetails) => {
+  const handleCreatePlan = async (assessment: AssessmentWithDetails, model = 'pro') => {
     if (!assessment) return;
 
     try {
@@ -259,8 +301,45 @@ const handleOpenModal = async (assessment: AssessmentWithDetails) => {
         // (O seu código para obter rawData e construir o payload permanece o mesmo)
         const { data: rawData, error: fetchError } = await supabase.from('evaluations').select(`*, installation:installations(*), evaluation_answers(question_id, selected_options, text_answer), questionnaire:questionnaires(*, sections(*, questions(*, options:question_options(*))))`).eq('id', assessment.id).single();
         if (fetchError) throw fetchError;
-        const payload = { avaliacao_id: assessment.id, exploracao: { id: rawData.installation.id, nome: rawData.installation.name, tipo: rawData.installation.type, regiao: rawData.installation.region, }, avaliacao_scores: { total_score_percentagem: (rawData.total_score * 100), seccoes: rawData.section_scores.map((sc: any) => ({ nome: rawData.questionnaire.sections.find((s: any) => s.id === sc.section_id)?.name, score_percentagem: (sc.score * 100), })) }, respostas_detalhadas: rawData.questionnaire.sections.map((section: any) => ({ seccao: section.name, perguntas: section.questions.map((q: any) => { const answer = rawData.evaluation_answers.find((a: any) => a.question_id === q.id); let respostaTexto = "Sem resposta"; if(answer){ if(q.type === 'text') respostaTexto = answer.text_answer || "Sem resposta"; else if(answer.selected_options) { respostaTexto = q.options.filter((opt: any) => answer.selected_options.includes(opt.id)).map((opt: any) => opt.text).join(', '); } } return { texto: q.text, resposta: respostaTexto, score: q.score }; }) })) };
-        
+        const payload = { avaliacao_id: assessment.id, 
+                          model: model, 
+                          exploracao: { id: rawData.installation.id, nome: rawData.installation.name, 
+                          tipo: rawData.installation.type, regiao: rawData.installation.region, }, 
+                          avaliacao_scores: { total_score_percentagem: (rawData.total_score * 100), 
+                            seccoes: rawData.section_scores.map((sc: any) => ({ nome: rawData.questionnaire.sections.find((s: any) => s.id === sc.section_id)?.name, 
+                            score_percentagem: (sc.score * 100), })) }, 
+                            respostas_detalhadas: rawData.questionnaire.sections.map((section: any) => ({
+            seccao: section.name,
+            perguntas: section.questions.map((question: any) => {
+                const answer = rawData.evaluation_answers.find(
+                    (a: any) => a.question_id === question.id
+                );
+                
+                // Extraímos apenas o texto de todas as opções disponíveis
+                const opcoesDisponiveis = question.options.map((opt: any) => opt.text);
+                let respostaSelecionada: string[] = [];
+
+                if (answer) {
+                    if (question.type === 'text') {
+                        respostaSelecionada = [answer.text_answer || ""];
+                    } else if (answer.selected_options && answer.selected_options.length > 0) {
+                        // Encontramos o texto das opções que o utilizador selecionou
+                        respostaSelecionada = question.options
+                            .filter((opt: any) => answer.selected_options.includes(opt.id))
+                            .map((opt: any) => opt.text);
+                    }
+                }
+
+                return {
+                    texto: question.text,
+                    tipo_pergunta: question.type,
+                    opcoes_disponiveis: opcoesDisponiveis,
+                    resposta_selecionada: respostaSelecionada,
+                };
+            })
+        }))
+        // --- FIM DA LÓGICA ATUALIZADA ---
+    };
         const webhookUrl = 'https://manuelnunes.duckdns.org/webhook/eb8add01-d6e3-4e47-a6f2-14bc52d828ac';
         const response = await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), });
 
@@ -275,7 +354,7 @@ const handleOpenModal = async (assessment: AssessmentWithDetails) => {
         await supabase.from('evaluations').update({ plan_status: 'not_generated' }).eq('id', assessment.id);
     }
 };
-  const handleRegeneratePlan = async () => {
+  const handleRegeneratePlan = async (model: string) => {
       if (!selectedAssessment) {
         alert("Nenhuma avaliação selecionada para regenerar.");
         return;
@@ -292,7 +371,7 @@ const handleOpenModal = async (assessment: AssessmentWithDetails) => {
       // A função handleCreatePlan já trata de tudo o resto (chamar o webhook,
       // mudar o estado na base de dados, etc.).
       // O nosso poller useEffect irá automaticamente detetar a mudança de 'generating' para 'draft'.
-      await handleCreatePlan(selectedAssessment); 
+       await handleCreatePlan(selectedAssessment, model); 
       
       // 4. Limpamos o estado de loading depois de a operação ser iniciada.
       // O poller assume a responsabilidade a partir daqui.

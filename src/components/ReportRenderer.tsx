@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
-// CORREÇÃO #1: A importação do 'ReactNode' é separada para um 'type-only import'.
-import type { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 interface ReportRendererProps {
   markdownContent: string;
@@ -16,12 +16,8 @@ const ReportRenderer: React.FC<ReportRendererProps> = ({ markdownContent }) => {
 
     const citationMap = new Map<string, number>();
     const uniqueReferences: { citation: string, doi: string }[] = [];
-
-    // A regex robusta com o flag 's' (dotAll) para apanhar quebras de linha.
     const citationRegex = /\[\["(.+?)"\s*,\s*"(.+?)"\s*\]\]/gs;
 
-    // CORREÇÃO #2: O parâmetro 'match' não utilizado é prefixado com um underscore.
-    // Isto diz ao TypeScript que o parâmetro é intencionalmente não utilizado.
     const processed = markdownContent.replace(citationRegex, (_match, citationText, doiUrl) => {
       let finalDoiUrl = doiUrl.trim();
       if (!finalDoiUrl.startsWith('http')) {
@@ -29,61 +25,29 @@ const ReportRenderer: React.FC<ReportRendererProps> = ({ markdownContent }) => {
       }
       if (!citationMap.has(citationText)) {
         uniqueReferences.push({ citation: citationText, doi: finalDoiUrl });
-        citationMap.set(citationText, uniqueReferences.length);
       }
-      const citationNumber = citationMap.get(citationText);
-      return `CITATION_MARKER_${citationNumber}`;
+      const citationNumber = uniqueReferences.findIndex(ref => ref.citation === citationText) + 1;
+      
+      return `<sup><a href="#ref-${citationNumber}" class="text-blue-600 hover:underline no-underline font-bold">[${citationNumber}]</a></sup>`;
     });
 
     return { processedMarkdown: processed, references: uniqueReferences };
   }, [markdownContent]);
 
-  // A LÓGICA FUNCIONAL: Função "Helper" que processa os marcadores.
-  const processNodeChildren = (children: ReactNode[]): ReactNode[] => {
-    return children.flatMap((child) => {
-      if (typeof child === 'string') {
-        const parts = child.split(/CITATION_MARKER_(\d+)/);
-        return parts.map((part, index) => {
-          if (index % 2 === 1) {
-            const citationNumber = parseInt(part, 10);
-            return (
-              <sup key={index} className="font-sans font-bold">
-                <a href={`#ref-${citationNumber}`} className="text-blue-600 hover:underline no-underline">
-                  [{citationNumber}]
-                </a>
-              </sup>
-            );
-          }
-          return part;
-        });
-      }
-      return child;
-    });
-  };
-
   return (
     <div>
-      {/* Corpo principal do relatório */}
-      <div className="prose max-w-none">
+      {/* A MUDANÇA CRUCIAL: A classe 'prose' foi removida. */}
+      {/* Em vez disso, adicionamos uma classe nossa para os estilos base. */}
+      <div className="report-content">
         <ReactMarkdown
-          components={{
-            // Aplicamos a nossa lógica tanto a parágrafos...
-            p: ({ node, ...props }) => {
-              const children = React.Children.toArray(props.children);
-              return <p {...props}>{processNodeChildren(children)}</p>;
-            },
-            // ...como a itens de lista.
-            li: ({ node, ...props }) => {
-              const children = React.Children.toArray(props.children);
-              return <li {...props}>{processNodeChildren(children)}</li>;
-            },
-          }}
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeRaw]}
         >
           {processedMarkdown}
         </ReactMarkdown>
       </div>
 
-      {/* Secção de Referências (já estava correta) */}
+      {/* A secção de Referências permanece a mesma */}
       {references.length > 0 && (
         <div className="mt-12 pt-6 border-t">
           <h3 className="text-lg font-bold mb-4">Referências</h3>

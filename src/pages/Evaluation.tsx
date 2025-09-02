@@ -372,6 +372,63 @@ const Evaluation: React.FC = () => {
           // Don't fail the whole process for this
         }
       }
+      const { data: fullQuestionnaire, error: qError } = await supabase
+      .from('questionnaires')
+      .select('*, sections(*, questions(*, options:question_options(*)))')
+      .eq('id', questionnaire.id)
+      .single();
+
+    if (qError) throw qError;
+
+      const payload = {
+        avaliacao_id: evaluation.id, // Usamos o ID da avaliação que acabámos de criar
+        model: "pro", // Usamos o modelo 'flash' por defeito, por ser mais rápido
+        exploracao: {
+          id: exploracaoId,
+          nome: exploracaoForm.name, // Precisamos de ter a certeza que estes dados estão disponíveis
+          tipo: exploracaoForm.type,
+          regiao: exploracaoForm.region,
+      },
+      avaliacao_scores: { /* ... construir este objeto ... */ },
+      respostas_detalhadas: fullQuestionnaire.sections.map((section: any) => ({
+        seccao: section.name,
+        perguntas: section.questions.map((question: any) => {
+          const answer = answers.find(a => a.questionId === question.id);
+          
+          const opcoesDisponiveis = question.options.map((opt: any) => opt.text);
+          let respostaSelecionada: string[] = [];
+
+          if (answer) {
+            if (question.type === 'text') {
+              respostaSelecionada = [answer.textAnswer || ""];
+            } else if (answer.selectedOptions && answer.selectedOptions.length > 0) {
+              respostaSelecionada = question.options
+                .filter((opt: any) => answer.selectedOptions.includes(opt.id))
+                .map((opt: any) => opt.text);
+            }
+          }
+
+          return {
+            texto: question.text,
+            tipo_pergunta: question.type,
+            opcoes_disponiveis: opcoesDisponiveis,
+            resposta_selecionada: respostaSelecionada,
+          };
+        })
+      }))
+    };
+    
+
+    // Atualizamos o estado na base de dados para 'generating'
+    await supabase.from('evaluations').update({ plan_status: 'generating' }).eq('id', evaluation.id);
+    
+    // Chamamos o webhook (sem bloquear a navegação do utilizador)
+    const webhookUrl = 'https://manuelnunes.duckdns.org/webhook/eb8add01-d6e3-4e47-a6f2-14bc52d828ac';
+    fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(error => console.error("Erro ao chamar o webhook de geração de plano:", error));
 
       // Navigate to results page (we'll create this next)
       navigate(`/evaluation-report/${evaluation.id}`);
