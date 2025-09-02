@@ -558,7 +558,7 @@ const Evaluation: React.FC = () => {
                   value={exploracaoForm.contact_name}
                   onChange={(e) => setExploracaoForm(prev => ({ ...prev, contact_name: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-forest-green"
-                  placeholder="Ex: Telmo Nunes"
+                  placeholder="Ex: José Silva"
                 />
               </div>
               
