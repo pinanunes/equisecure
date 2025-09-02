@@ -422,58 +422,68 @@ const renderPlanButton = (assessment: AssessmentWithDetails) => {
     return { level: 'Alto', color: 'text-red-600' };
   };
 
+  // src/pages/admin/AssessmentManagement.tsx
+
+  // src/pages/admin/AssessmentManagement.tsx
+
+  // src/pages/admin/AssessmentManagement.tsx
+
   const exportScores = async () => {
     setExporting(true);
     try {
-      // Prepare CSV data for scores
-      const csvHeaders = [
-        'Nome da Exploração',
-        'Utilizador',
-        'Data',
-        'Score Total (%)'
-      ];
+      const { data: allAssessments, error } = await supabase
+        .from('evaluations')
+        .select(`
+          *,
+          installation:installations(*),
+          profile:profiles(email),
+          questionnaire:questionnaires(
+            sections(id, name, order_index)
+          )
+        `)
+        .order('created_at', { ascending: false });
 
-      // Add section score headers dynamically
-      const sectionHeaders: string[] = [];
-      if (assessments.length > 0) {
-        const firstAssessment = assessments[0];
-        if (firstAssessment.section_scores) {
-          const sectionScores = firstAssessment.section_scores as Array<{ section_id: string; score: number }>;
-          sectionScores.forEach((_, index) => {
-            sectionHeaders.push(`Score Secção ${index + 1} (%)`);
-          });
-        }
+      if (error) throw error;
+      if (!allAssessments || allAssessments.length === 0) {
+        alert('Não há avaliações para exportar.');
+        setExporting(false);
+        return;
       }
 
-      const allHeaders = [...csvHeaders, ...sectionHeaders];
+      const firstAssessment = allAssessments[0];
+      const sections = firstAssessment.questionnaire?.sections?.sort((a: { order_index: number }, b: { order_index: number }) => a.order_index - b.order_index) || [];
+      const sectionHeaders = sections.map((section: { name: string }) => `Score: ${section.name} (%)`);
 
-      const csvRows = assessments.map(assessment => {
+       const csvHeaders = [
+        'ID da Avaliação', 'ID da Exploração', 'Nome da Exploração', 'Nome do Contacto', 'Região', 'Tipo de Exploração', // Novos campos
+        'Email do Utilizador', 'Data', 'Score Total (%)', ...sectionHeaders
+      ];
+
+      const csvRows = allAssessments.map((assessment: any) => {
         const baseRow = [
+          assessment.id,
+          assessment.installation.id,
           assessment.installation.name,
-          assessment.user_email,
+          assessment.installation.contact_name || '', // Novo campo
+          assessment.installation.region || '',     // Novo campo
+          assessment.installation.type || '',       // Novo campo
+          assessment.profile?.email || 'N/A',
           formatDate(assessment.created_at),
           (assessment.total_score * 100).toFixed(1)
         ];
+        
+        // --- A CORREÇÃO ESTÁ AQUI ---
+        // Adicionamos o tipo explícito para 'section'
+        const sectionScores = sections.map((section: { id: string }) => {
+          const sectionScore = assessment.section_scores?.find((s: any) => s.section_id === section.id);
+          return sectionScore ? (sectionScore.score * 100).toFixed(1) : '';
+        });
+        // --- FIM DA CORREÇÃO ---
 
-        // Add section scores
-        const sectionScores: string[] = [];
-        if (assessment.section_scores) {
-          const scores = assessment.section_scores as Array<{ section_id: string; score: number }>;
-          scores.forEach(sectionScore => {
-            sectionScores.push((sectionScore.score * 100).toFixed(1));
-          });
-        }
-
-        return [...baseRow, ...sectionScores];
+        return [...baseRow, ...sectionScores].join(';');
       });
 
-      // Create CSV content
-      const csvContent = [
-        allHeaders.join(';'),
-        ...csvRows.map(row => row.join(';'))
-      ].join('\n');
-
-      // Download CSV
+      const csvContent = [csvHeaders.join(';'), ...csvRows].join('\n');
       const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -491,10 +501,11 @@ const renderPlanButton = (assessment: AssessmentWithDetails) => {
     }
   };
 
+   // src/pages/admin/AssessmentManagement.tsx
+
   const exportFullData = async () => {
     setExporting(true);
     try {
-      // Fetch detailed assessment data with answers (without user:profiles join)
       const { data: detailedAssessments, error } = await supabase
         .from('evaluations')
         .select(`
@@ -523,10 +534,10 @@ const renderPlanButton = (assessment: AssessmentWithDetails) => {
       if (error) {
         console.error('Error fetching detailed assessments:', error);
         alert('Erro ao buscar dados detalhados das avaliações.');
+        setExporting(false);
         return;
       }
 
-      // Fetch user emails for each assessment
       const assessmentsWithUserEmails = [];
       for (const assessment of detailedAssessments || []) {
         const { data: profileData, error: profileError } = await supabase
@@ -545,61 +556,64 @@ const renderPlanButton = (assessment: AssessmentWithDetails) => {
         });
       }
 
-      // Prepare CSV headers
       const csvHeaders = [
-        'Nome da Exploração',
-        'Utilizador',
-        'Data',
-        'Secção',
-        'Pergunta',
-        'Resposta'
+        'ID da Avaliação', 'ID da Exploração', 'Nome da Exploração', 'Nome do Contacto', 'Região', 'Tipo de Exploração', // Novos campos
+        'Utilizador', 'Data', 'Secção', 'Pergunta', 'Resposta'
       ];
 
       const csvRows: string[] = [];
 
-      assessmentsWithUserEmails.forEach(assessment => {
+      assessmentsWithUserEmails.forEach((assessment: any) => {
         const baseInfo = [
+          assessment.id,
+          assessment.installation.id,
           assessment.installation.name,
+          assessment.installation.contact_name || '', // Novo campo
+          assessment.installation.region || '',     // Novo campo
+          assessment.installation.type || '',       // Novo campo
           assessment.user_email,
           formatDate(assessment.created_at)
         ];
 
-        assessment.questionnaire?.sections?.forEach((section: any) => {
-          section.questions?.forEach((question: any) => {
+        // --- A CORREÇÃO ESTÁ AQUI ---
+        // Adicionamos os tipos explícitos para 'section' e 'question'
+        assessment.questionnaire?.sections?.forEach((section: { name: string; questions: any[] }) => {
+          section.questions?.forEach((question: { text: string; id: any; type: string; options: any[] }) => {
             const answer = assessment.evaluation_answers?.find(
               (a: any) => a.question_id === question.id
             );
 
-            let responseText = 'Sem resposta';
+            let responseText = '"Sem resposta"'; // Envolvemos em aspas para segurança no CSV
             
             if (answer) {
               if (question.type === 'text') {
-                responseText = answer.text_answer || 'Sem resposta';
+                responseText = `"${(answer.text_answer || 'Sem resposta').replace(/"/g, '""')}"`;
               } else if (answer.selected_options) {
                 const selectedOptionTexts = question.options
                   ?.filter((opt: any) => answer.selected_options?.includes(opt.id))
                   .map((opt: any) => opt.text) || [];
-                responseText = selectedOptionTexts.join(', ') || 'Sem resposta';
+                responseText = `"${(selectedOptionTexts.join(', ') || 'Sem resposta').replace(/"/g, '""')}"`;
               }
             }
 
+            const cleanSection = `"${section.name.replace(/"/g, '""')}"`;
+            const cleanQuestion = `"${question.text.replace(/"/g, '""')}"`;
+
             csvRows.push([
               ...baseInfo,
-              section.name,
-              question.text,
+              cleanSection,
+              cleanQuestion,
               responseText
             ].join(';'));
           });
         });
       });
 
-      // Create CSV content
       const csvContent = [
         csvHeaders.join(';'),
         ...csvRows
       ].join('\n');
 
-      // Download CSV
       const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -609,6 +623,7 @@ const renderPlanButton = (assessment: AssessmentWithDetails) => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
     } catch (error) {
       console.error('Error exporting full data:', error);
       alert('Erro ao exportar dados completos.');
@@ -630,7 +645,7 @@ const renderPlanButton = (assessment: AssessmentWithDetails) => {
           user_feedback,
           user_comment,
           evaluation:evaluations(
-            installation:installations(name),
+            installation:installations(name, id, contact_name, region, type),
             profile:profiles(email)
           )
         `)
@@ -643,7 +658,11 @@ const renderPlanButton = (assessment: AssessmentWithDetails) => {
 
       // 2. Preparar os cabeçalhos do CSV
       const csvHeaders = [
-        'Nome da Exploração',
+        'ID da Exploração', 
+        'Nome da Exploração', 
+        'Nome do Contacto', 
+        'Região', 
+        'Tipo de Exploração',
         'Email do Utilizador',
         'Medida Recomendada',
         'Categoria da Medida',
@@ -660,8 +679,14 @@ const renderPlanButton = (assessment: AssessmentWithDetails) => {
         // Limpamos o texto para garantir que não quebra o CSV (removemos ponto e vírgula e quebras de linha)
         const cleanMeasureText = `"${(feedback.measure_text || '').replace(/"/g, '""').replace(/(\r\n|\n|\r)/gm, ' ')}"`;
         const cleanComment = `"${(feedback.user_comment || '').replace(/"/g, '""').replace(/(\r\n|\n|\r)/gm, ' ')}"`;
-
+        const installation = feedback.evaluation?.installation;
         return [
+          installation?.id || '',
+          installation?.name || 'N/A',
+          installation?.contact_name || '',
+          installation?.region || '',
+          installation?.type || '',
+          feedback.evaluation?.profile?.email || 'N/A',
           installationName,
           userEmail,
           cleanMeasureText,

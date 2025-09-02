@@ -570,7 +570,7 @@ const Evaluation: React.FC = () => {
                 <select
                   value={exploracaoForm.region}
                   onChange={(e) => setExploracaoForm(prev => ({ ...prev, region: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-forest-green"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-forest-green"
                 >
                   <option value="">Selecione a região</option>
                   {regioesPorGrupo.map(grupo => (
@@ -591,7 +591,7 @@ const Evaluation: React.FC = () => {
                 <select
                   value={exploracaoForm.type}
                   onChange={(e) => setExploracaoForm(prev => ({ ...prev, type: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-forest-green focus:border-forest-green"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-forest-green"
                 >
                   <option value="">Selecione o tipo</option>
                   <option value="Centro equestre sem escola de equitação">Centro equestre sem escola de equitação</option>
